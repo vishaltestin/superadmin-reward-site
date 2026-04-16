@@ -21,39 +21,37 @@ class CategoryResource extends Resource
 {
     protected static ?string $model = Category::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static null|string|BackedEnum $navigationIcon = Heroicon::OutlinedRectangleStack;
 
     protected static ?string $recordTitleAttribute = 'name';
 
-protected static string|UnitEnum|null $navigationGroup = 'Platform Foundation';
+    protected static null|string|UnitEnum $navigationGroup = 'Platform Foundation';
 
-public static function getEloquentQuery(): Builder
-{
-    return parent::getEloquentQuery()
-        ->withoutGlobalScopes([
-            SoftDeletingScope::class,
-        ])
-        ->with(['parent']);
-}
+    public static function getEloquentQuery() : Builder
+    {
+        return parent::getEloquentQuery()
+            ->withoutGlobalScopes([SoftDeletingScope::class])
+            ->with(['parent']);
+    }
 
-    public static function form(Schema $schema): Schema
+    public static function form(Schema $schema) : Schema
     {
         return CategoryForm::configure($schema);
     }
 
-    public static function table(Table $table): Table
+    public static function table(Table $table) : Table
     {
         return CategoriesTable::configure($table);
     }
 
-    public static function getRelations(): array
+    public static function getRelations() : array
     {
         return [
             //
         ];
     }
 
-    public static function getPages(): array
+    public static function getPages() : array
     {
         return [
             'index' => ListCategories::route('/'),
@@ -62,11 +60,9 @@ public static function getEloquentQuery(): Builder
         ];
     }
 
-    public static function getRecordRouteBindingEloquentQuery(): Builder
+    public static function getRecordRouteBindingEloquentQuery() : Builder
     {
         return parent::getRecordRouteBindingEloquentQuery()
-            ->withoutGlobalScopes([
-                SoftDeletingScope::class,
-            ]);
+            ->withoutGlobalScopes([SoftDeletingScope::class]);
     }
 }

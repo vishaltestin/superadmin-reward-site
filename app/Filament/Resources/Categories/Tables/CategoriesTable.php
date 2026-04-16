@@ -15,38 +15,31 @@ use Filament\Tables\Table;
 
 class CategoriesTable
 {
-    public static function configure(Table $table): Table
+    public static function configure(Table $table) : Table
     {
-        return $table
-            ->columns([
-                ImageColumn::make('image')
-                    ->circular(),
+        return $table->columns([
+            ImageColumn::make('image')->circular(),
 
-                TextColumn::make('name')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold')
-                    ->description(fn ($record) => $record->parent ? 'Sub: ' . $record->parent->name : 'Top-Level'),
+            TextColumn::make('name')
+                ->searchable()
+                ->sortable()
+                ->weight('bold')
+                ->description(
+                    fn ($record)
+                    => $record->parent ? 'Sub: ' . $record->parent->name : 'Top-Level',
+                ),
 
-                TextColumn::make('sort_order')
-                    ->numeric()
-                    ->sortable(),
+            TextColumn::make('sort_order')->numeric()->sortable(),
 
-                IconColumn::make('is_active')
-                    ->boolean(),
+            IconColumn::make('is_active')->boolean(),
 
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
-            ->reorderable('sort_order')
-            ->filters([
-                TrashedFilter::make(),
-            ])
-            ->recordActions([
-                EditAction::make(),
-            ])
+            TextColumn::make('updated_at')
+                ->dateTime()
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true),
+        ])->reorderable('sort_order')
+            ->filters([TrashedFilter::make()])
+            ->recordActions([EditAction::make()])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
