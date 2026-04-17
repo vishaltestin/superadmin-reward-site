@@ -14,6 +14,8 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use UnitEnum;
+use Illuminate\Database\Eloquent\Builder;
+
 
 class EventResource extends Resource
 {
@@ -50,4 +52,9 @@ class EventResource extends Resource
             'edit' => EditEvent::route('/{record}/edit'),
         ];
     }
+    public static function getEloquentQuery(): Builder
+{
+    return parent::getEloquentQuery()
+        ->with(['vertical', 'parent']);
+}
 }

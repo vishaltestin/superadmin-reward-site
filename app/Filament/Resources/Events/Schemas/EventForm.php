@@ -16,6 +16,7 @@ class EventForm
     public static function configure(Schema $schema): Schema
     {
         return $schema
+        ->columns(1)
             ->components([
                 Grid::make(2)
                     ->schema([
@@ -25,19 +26,22 @@ class EventForm
                             ->live()
                             ->label('Vertical'),
 
-                        Select::make('parent_id')
-                            ->relationship(
-                                name: 'parent',
-                                titleAttribute: 'title',
-                                modifyQueryUsing: fn (Builder $query, Get $get) => 
-                                    $query->where('vertical_id', $get('vertical_id'))
-                                          ->whereNull('parent_id')
-                            )
-                            ->searchable()
-                            ->preload()
-                            ->disabled(fn (Get $get) => blank($get('vertical_id')))
-                            ->label('Parent Group')
-                            ->helperText('Select a group like "Sales" or "Marketing" if applicable.'),
+  Select::make('parent_id')
+    ->relationship(
+        name: 'parent',
+        titleAttribute: 'title',
+        modifyQueryUsing: function (Builder $query, Get $get, ?Event $record) {
+            return $query
+                ->where('vertical_id', $get('vertical_id'))
+                ->whereNull('parent_id')
+                ->when($record, fn ($q) => $q->where('id', '!=', $record->id));
+        }
+    )
+    ->searchable()
+    ->preload()
+    ->disabled(fn (Get $get) => blank($get('vertical_id')))
+    ->label('Parent Group')
+    ->helperText('Select a group like "Sales" or "Marketing" if applicable.'),
 
                         TextInput::make('title')
                             ->required()

@@ -19,17 +19,11 @@ class VerticalForm
                 ->required()
                 ->maxLength(255)
                 ->live(debounce: 500)
-                ->afterStateUpdated(
-                    function (
-                        Set $set,
-                        ?string $state,
-                        string $operation,
-                    ) {
-                    if ($operation === 'create') {
-                        $set('slug', Str::slug($state));
-                    }
-                },
-                ),
+                ->afterStateUpdated(function (Set $set, ?string $state, string $operation, $get) {
+    if ($operation === 'create' && empty($get('slug'))) {
+        $set('slug', Str::slug($state));
+    }
+}),
 
             TextInput::make('slug')
                 ->required()

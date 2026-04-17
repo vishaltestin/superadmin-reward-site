@@ -25,7 +25,11 @@ class EventsTable
                     ->badge()
                     ->color('primary')
                     ->sortable()
-                    ->searchable(),
+                   ->searchable(query: function ($query, $search) {
+    $query->whereHas('vertical', fn ($q) =>
+        $q->where('name', 'like', "%{$search}%")
+    );
+}),
 
                 TextColumn::make('parent.title')
                     ->label('Group')

@@ -30,7 +30,11 @@ class UsersTable
 
                 TextColumn::make('company.name')
                     ->sortable()
-                    ->searchable()
+                    ->searchable(query: function ($query, $search) {
+    $query->whereHas('company', fn ($q) =>
+        $q->where('name', 'like', "%{$search}%")
+    );
+})
                     ->badge()
                     ->color('gray'),
 

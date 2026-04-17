@@ -55,9 +55,9 @@ class CategoryForm
                                     Get $get,
                                     string $operation,
                                 ) {
-                                if ($operation === 'create' && empty($get('alias'))) {
-                                    $set('alias', Str::slug($state));
-                                }
+                                if ($operation === 'create' && empty($get('slug'))) {
+    $set('slug', Str::slug($state));
+}
                             },
                             ),
 

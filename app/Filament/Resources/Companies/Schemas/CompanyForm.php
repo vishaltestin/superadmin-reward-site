@@ -34,10 +34,11 @@ class CompanyForm
                             ->required()
                             ->label('Company Name')
                             ->live(debounce: 500)
-                            ->afterStateUpdated(
-                                fn (Set $set, ?string $state, string $operation)
-                                => $operation === 'create' ? $set('alias', Str::slug($state)) : null,
-                            ),
+                            ->afterStateUpdated(function (Set $set, ?string $state, string $operation, $get) {
+    if ($operation === 'create' && empty($get('alias'))) {
+        $set('alias', Str::slug($state));
+    }
+}),
 
                         Select::make('number_of_employee')
                             ->label('Company Size')

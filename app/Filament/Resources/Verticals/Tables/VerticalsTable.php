@@ -19,9 +19,9 @@ class VerticalsTable
         return $table
             ->columns([
                 TextColumn::make('name')
-                    ->searchable(),
+                    ->searchable()->sortable(),
                 TextColumn::make('slug')
-                    ->searchable(),
+                   ->searchable()->sortable(),
                 IconColumn::make('is_active')
                     ->boolean(),
                 TextColumn::make('created_at')

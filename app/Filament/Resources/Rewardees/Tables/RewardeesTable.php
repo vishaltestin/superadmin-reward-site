@@ -15,26 +15,35 @@ class RewardeesTable
     {
         return $table
             ->columns([
-                TextColumn::make('user.first_name')
-                    ->label('First Name')
-                    ->searchable()
-                    ->sortable(),
-
-                TextColumn::make('user.last_name')
-                    ->label('Last Name')
-                    ->searchable()
-                    ->sortable(),
+                TextColumn::make('full_name')
+    ->label('Name')
+    ->getStateUsing(fn ($record) =>
+        $record->user->first_name . ' ' . $record->user->last_name
+    )
+    ->searchable(query: function ($query, $search) {
+        $query->whereHas('user', fn ($q) =>
+            $q->whereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"])
+        );
+    }),
 
                 TextColumn::make('user.email')
                     ->label('Email Address')
-                    ->searchable()
+                     ->searchable(query: function ($query, $search) {
+        $query->whereHas('user', fn ($q) =>
+            $q->where('email', 'like', "%{$search}%")
+        );
+    })
                     ->copyable(),
 
                 TextColumn::make('company.name')
                     ->label('Company')
                     ->badge()
                     ->color('gray')
-                    ->searchable()
+                   ->searchable(query: function ($query, $search) {
+        $query->whereHas('company', fn ($q) =>
+            $q->where('name', 'like', "%{$search}%")
+        );
+    })
                     ->sortable(),
 
                 TextColumn::make('vertical.name')

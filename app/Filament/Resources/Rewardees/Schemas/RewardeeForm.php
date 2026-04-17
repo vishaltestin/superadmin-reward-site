@@ -23,17 +23,17 @@ class RewardeeForm
                                 Select::make('user_id')
                                     ->relationship('user', 'email')
                                     ->disabled() // As Super Admin, you usually shouldn't change the user identity here
-                                    ->label('User Email'),
+                                    ->label('User Email')->dehydrated(false),
 
                                 Select::make('company_id')
                                     ->relationship('company', 'name')
                                     ->disabled()
-                                    ->label('Belongs to Company'),
+                                    ->label('Belongs to Company')->dehydrated(false),
 
                                 Select::make('vertical_id')
                                     ->relationship('vertical', 'name')
                                     ->disabled()
-                                    ->label('Assigned Vertical'),
+                                    ->label('Assigned Vertical')->dehydrated(false),
                             ])->columnSpanFull(),
 
                         Section::make('Vertical Specific Data (JSON)')
