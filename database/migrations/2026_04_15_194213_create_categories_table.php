@@ -12,7 +12,6 @@ return new class extends Migration
             $table->id();
             
             // Relationships
-            // $table->foreignId('vertical_id')->constrained()->cascadeOnDelete();
             $table->foreignId('parent_id')->nullable()->constrained('categories')->nullOnDelete();
             
             // Basic Fields

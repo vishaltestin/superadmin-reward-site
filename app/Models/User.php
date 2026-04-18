@@ -8,13 +8,14 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use App\Traits\HasWallet;
 
 #[Fillable(['name', 'email', 'password', 'company_id', 'user_type', 'first_name', 'last_name', 'mobile', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasWallet;
 
     protected function casts(): array
     {
@@ -23,6 +24,16 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_active' => 'boolean',
         ];
+    }
+    protected static function booted()
+    {
+        // Auto-create a wallet when a new user is created
+        static::created(function ($user) {
+            // We only need wallets for people receiving points!
+            if ($user->user_type === 'rewardee') {
+                $user->wallet()->create(['balance' => 0.00]);
+            }
+        });
     }
 
     public function company()

@@ -45,7 +45,7 @@ class CompanyResource extends Resource
     {
         return parent::getEloquentQuery()
             ->withoutGlobalScopes([SoftDeletingScope::class])
-            ->with(['categories', 'verticals']);
+            ->with(['categories', 'verticals', 'wallet']); 
     }
 
     public static function getPages() : array

@@ -118,11 +118,11 @@ class CompanyForm
 
                         Section::make('Account Status')
                             ->schema([
-                                TextInput
-                                ::make('available_funds')
-                                ->numeric()
-                                ->default(0.00)
-                                ->prefix('₹'),
+                                // TextInput
+                                // ::make('available_funds')
+                                // ->numeric()
+                                // ->default(0.00)
+                                // ->prefix('₹'),
 
                             Toggle::make('is_approved')
                                 ->label('Lead Approved')
