@@ -67,4 +67,13 @@ class Company extends Model
             ])
             ->withTimestamps();
     }
+
+
+    /**
+     * Get all orders placed by employees of this company.
+     */
+    public function orders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
 }

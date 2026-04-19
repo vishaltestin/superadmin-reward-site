@@ -50,4 +50,17 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Vertical::class, 'admin_vertical_access', 'user_id', 'vertical_id');
     }
+
+    public function orders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    /**
+     * Get all digital voucher codes claimed by this user.
+     */
+    public function claimedVouchers(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(VoucherCode::class, 'issued_to_user_id');
+    }
 }
