@@ -20,10 +20,19 @@ class Company extends Model
         'alias',
         'logo',
         'points_name',
-        'available_funds',
+        'point_multiplier',
         'is_active',
         'is_approved',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+            'is_approved' => 'boolean',
+            'point_multiplier' => 'float', // <-- Added here
+        ];
+    }
     protected static function booted()
     {
         // Listen for updates to the company record

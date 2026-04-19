@@ -18,6 +18,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Exception;
+use Filament\Schemas\Components\Utilities\Set;
 
 class CompaniesTable
 {
@@ -79,7 +80,6 @@ class CompaniesTable
                 ->label('Manage Funds')
                 ->icon('heroicon-o-banknotes')
                 ->color('success')
-                // Hide this button if the company isn't approved yet (since they have no wallet)
                 ->visible(fn ($record) => $record->is_approved)
                 ->form([
                     Select::make('transaction_type')
@@ -88,12 +88,32 @@ class CompaniesTable
                             'credit' => 'Add Funds (Credit)',
                             'debit'  => 'Deduct Funds (Debit)',
                         ])
+                        ->default('credit')
+                        ->live()
                         ->required(),
-                    TextInput::make('amount')
-                        ->label('Amount (₹)')
+                    
+                    // 1. Ask for the actual money paid
+                    TextInput::make('fiat_paid')
+                        ->label('Actual Money Paid (₹)')
                         ->numeric()
                         ->minValue(1)
+                        ->live(debounce: 500)
+                        ->required()
+                        // THE MAGIC: Instantly calculate the points based on the company's multiplier
+                         ->afterStateUpdated(function (Set $set, ?string $state, $record) {
+        if ($state && $record) {
+            $calculatedPoints = (float) $state * (float) $record->point_multiplier;
+            $set('amount', $calculatedPoints);
+        }
+    }),
+
+                    // 2. The calculated points (Admin can still manually override if they want)
+                    TextInput::make('amount')
+                        ->label('Total Points to Credit/Debit')
+                        ->helperText(fn ($record) => "Auto-calculated based on this company's {$record->point_multiplier}x multiplier.")
+                        ->numeric()
                         ->required(),
+
                     TextInput::make('description')
                         ->label('Description / Reference')
                         ->placeholder('e.g., Bank Transfer INV-123')
@@ -101,16 +121,23 @@ class CompaniesTable
                         ->maxLength(255),
                 ])
                 ->action(function ($record, array $data) {
-                    // Fallback to ensure wallet exists just in case
                     $wallet = $record->wallet()->firstOrCreate([], ['balance' => 0.00]);
+
+                    $fiatPaidValue = (float) $data['fiat_paid'];
+                    $fiatPaidFormatted = number_format($fiatPaidValue, 2);
+                    $auditNote = "{$data['description']} (Rate: {$record->point_multiplier}x)";
 
                     try {
                         if ($data['transaction_type'] === 'credit') {
-                            $wallet->credit((float) $data['amount'], $data['description']);
-                            $message = 'Funds successfully credited to ledger.';
+                            // Pass $fiatPaidValue as the 5th parameter!
+                            // (amount, description, reference, expiresAt, fiatPaid)
+                            $wallet->credit((float) $data['amount'], $auditNote, null, null, $fiatPaidValue);
+                            $message = 'Points successfully credited to ledger.';
                         } else {
-                            $wallet->debit((float) $data['amount'], $data['description']);
-                            $message = 'Funds successfully deducted from ledger.';
+                            // Pass $fiatPaidValue as the 4th parameter!
+                            // (amount, description, reference, fiatPaid)
+                            $wallet->debit((float) $data['amount'], $auditNote, null, $fiatPaidValue);
+                            $message = 'Points successfully deducted from ledger.';
                         }
 
                         Notification::make()
@@ -122,7 +149,7 @@ class CompaniesTable
                         Notification::make()
                             ->danger()
                             ->title('Transaction Failed')
-                            ->body($e->getMessage()) // e.g., "Insufficient funds" from your Wallet model
+                            ->body($e->getMessage())
                             ->send();
                     }
                 }),

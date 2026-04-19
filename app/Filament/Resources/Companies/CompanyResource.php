@@ -15,6 +15,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use UnitEnum;
 
 class CompanyResource extends Resource
 {
@@ -23,6 +24,7 @@ class CompanyResource extends Resource
     protected static null|string|BackedEnum $navigationIcon = Heroicon::OutlinedRectangleStack;
 
     protected static ?string $recordTitleAttribute = 'name';
+    protected static string|UnitEnum|null $navigationGroup = 'Platform Foundation';
 
     public static function form(Schema $schema) : Schema
     {

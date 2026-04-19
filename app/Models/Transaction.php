@@ -12,10 +12,23 @@ class Transaction extends Model
         'wallet_id',
         'type',
         'amount',
+        'fiat_paid',
+        'remaining_amount',
+        'expires_at',      
         'reference_type',
         'reference_id',
         'description',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'expires_at' => 'datetime',
+            'amount' => 'decimal:2',
+            'fiat_paid' => 'decimal:2', // <-- Added here
+            'remaining_amount' => 'decimal:2',
+        ];
+    }
 
     // The wallet this transaction belongs to
     public function wallet(): BelongsTo

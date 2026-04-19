@@ -110,6 +110,14 @@ class CompanyForm
                             ->prefix('rewardsapp.in/ecom/'),
 
                         TextInput::make('points_name')->default('Points')->required(),
+                        TextInput::make('point_multiplier')
+    ->label('Point Conversion Multiplier')
+    ->helperText('Default is 1.00 (1:1 ratio). Set to 1.20 for a 20% point bonus on all funds added.')
+    ->numeric()
+    ->minValue(0.01)
+    ->step(0.01)
+    ->default(1.00)
+    ->required(),
 
                         FileUpload::make('logo')
                             ->image()
