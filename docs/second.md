@@ -70,9 +70,9 @@ To prevent infinite financial liability, points expire.
 
 ---
 
-## 5. Filament Admin Modules (v3+)
+## 5. Filament Admin Modules (v4+)
 
-*All resources follow a strict v3 modular architecture, separated into `Pages/`, `Schemas/`, and `Tables/`.*
+*All resources follow a strict v4 modular architecture, separated into `Pages/`, `Schemas/`, and `Tables/`.*
 
 ### `CompanyResource`
 * **Schema:** Uses `Tabs`, `Grid`, and `Section` components for a clean UI. Fields conditionally calculate values (e.g., Alias auto-generates from Name).

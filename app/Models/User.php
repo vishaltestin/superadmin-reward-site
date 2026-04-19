@@ -29,9 +29,15 @@ class User extends Authenticatable
     {
         // Auto-create a wallet when a new user is created
         static::created(function ($user) {
-            // We only need wallets for people receiving points!
             if ($user->user_type === 'rewardee') {
                 $user->wallet()->create(['balance' => 0.00]);
+            }
+        });
+
+        // Catch users who change roles later!
+        static::updated(function ($user) {
+            if ($user->wasChanged('user_type') && $user->user_type === 'rewardee') {
+                $user->wallet()->firstOrCreate([], ['balance' => 0.00]);
             }
         });
     }

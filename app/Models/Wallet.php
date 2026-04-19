@@ -51,13 +51,16 @@ class Wallet extends Model
      */
     public function debit(float $amount, string $description = null, Model $reference = null, ?float $fiatPaid = null): Transaction
     {
-        if ($this->balance < $amount) {
-            throw new \Exception("Insufficient funds in wallet.");
-        }
-
         return DB::transaction(function () use ($amount, $description, $reference, $fiatPaid) {
-            // 1. Create the Paper Trail (Debit Record)
-            $transaction = $this->transactions()->create([
+            // 1. Lock the wallet row so no concurrent requests can read/write it
+            $wallet = self::where('id', $this->id)->lockForUpdate()->first();
+
+            if ($wallet->balance < $amount) {
+                throw new \Exception("Insufficient funds in wallet.");
+            }
+
+            // 2. Create the Paper Trail (Debit Record)
+            $transaction = $wallet->transactions()->create([
                 'type' => 'debit',
                 'amount' => $amount,
                 'fiat_paid' => $fiatPaid,
@@ -67,38 +70,35 @@ class Wallet extends Model
                 'reference_id' => $reference ? $reference->id : null,
             ]);
 
-            // 2. FIFO Logic: Find available credits and consume them
+            // 3. FIFO Logic: Find available credits and consume them
             $amountToConsume = $amount;
             
             // Get credits that have money left, haven't expired, ordered by nearest expiry
-            $credits = $this->transactions()
+            $credits = $wallet->transactions()
                 ->where('type', 'credit')
                 ->where('remaining_amount', '>', 0)
                 ->where(function ($query) {
                     $query->whereNull('expires_at')
                           ->orWhere('expires_at', '>', now());
                 })
-                // Prioritize expiring points first, then non-expiring points
                 ->orderByRaw('expires_at IS NULL ASC, expires_at ASC') 
-                ->lockForUpdate() // Prevent double-spending race conditions
+                ->lockForUpdate() // Lock the credit rows too
                 ->get();
 
             foreach ($credits as $credit) {
                 if ($amountToConsume <= 0) break; // We got all we need!
 
                 if ($credit->remaining_amount >= $amountToConsume) {
-                    // This credit can cover the rest of the bill
                     $credit->decrement('remaining_amount', $amountToConsume);
                     $amountToConsume = 0;
                 } else {
-                    // This credit isn't enough, drain it completely and keep looking
                     $amountToConsume -= $credit->remaining_amount;
                     $credit->update(['remaining_amount' => 0]);
                 }
             }
 
-            // 3. Finally, reduce the total wallet balance
-            $this->decrement('balance', $amount);
+            // 4. Finally, reduce the total locked wallet balance
+            $wallet->decrement('balance', $amount);
 
             return $transaction;
         });
