@@ -49,4 +49,14 @@ class Category extends Model
     {
         return $this->belongsToMany(Company::class);
     }
+    public function primaryProducts()
+    {
+        return $this->hasMany(Product::class, 'category_id');
+    }
+
+    // Get all products where this is just a TAGGED/SECONDARY category
+    public function secondaryProducts()
+    {
+        return $this->belongsToMany(Product::class, 'category_product');
+    }
 }

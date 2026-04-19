@@ -44,12 +44,27 @@ class Company extends Model
             }
         });
     }
+    
     public function categories()
     {
         return $this->belongsToMany(Category::class);
     }
+
     public function verticals()
     {
         return $this->belongsToMany(Vertical::class);
+    }
+
+    public function customProducts(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Product::class)
+            ->withPivot([
+                'is_excluded', 
+                'override_name', 
+                'override_image', 
+                'override_mrp', 
+                'override_selling_price'
+            ])
+            ->withTimestamps();
     }
 }
