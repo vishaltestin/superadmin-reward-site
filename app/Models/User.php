@@ -69,4 +69,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(VoucherCode::class, 'issued_to_user_id');
     }
+
+    public function addresses(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(UserAddress::class);
+    }
 }
