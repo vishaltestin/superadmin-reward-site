@@ -21,7 +21,7 @@ class CategoryResource extends Resource
 {
     protected static ?string $model = Category::class;
 
-    protected static null|string|BackedEnum $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static null|string|BackedEnum $navigationIcon = Heroicon::OutlinedSquaresPlus;
 
     protected static ?string $recordTitleAttribute = 'name';
 

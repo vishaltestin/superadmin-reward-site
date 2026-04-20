@@ -19,7 +19,7 @@ class LandingPageTemplateResource extends Resource
 {
     protected static ?string $model = LandingPageTemplate::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedGlobeAlt;
     protected static string|UnitEnum|null $navigationGroup = 'Templates';
 
     protected static ?string $recordTitleAttribute = 'name';

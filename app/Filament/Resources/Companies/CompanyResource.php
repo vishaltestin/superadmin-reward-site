@@ -21,7 +21,7 @@ class CompanyResource extends Resource
 {
     protected static ?string $model = Company::class;
 
-    protected static null|string|BackedEnum $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static null|string|BackedEnum $navigationIcon = Heroicon::OutlinedBuildingOffice2;
 
     protected static ?string $recordTitleAttribute = 'name';
     protected static string|UnitEnum|null $navigationGroup = 'Platform Foundation';
