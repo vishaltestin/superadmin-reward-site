@@ -10,12 +10,14 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use App\Traits\HasWallet;
 
+use Laravel\Sanctum\HasApiTokens;
+
 #[Fillable(['name', 'email', 'password', 'company_id', 'user_type', 'first_name', 'last_name', 'mobile', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, HasWallet;
+   use HasApiTokens, HasFactory, Notifiable, HasWallet;
 
     protected function casts(): array
     {

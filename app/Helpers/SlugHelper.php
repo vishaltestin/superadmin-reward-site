@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Helpers;
 
 use Illuminate\Support\Str;
@@ -11,7 +12,8 @@ class SlugHelper
         $original = $slug;
         $count = 1;
 
-        while ($model::where($column, $slug)->exists()) {
+        // FIX: Added withTrashed() so it sees soft-deleted records too!
+        while ($model::withTrashed()->where($column, $slug)->exists()) {
             $slug = $original . '-' . $count++;
         }
 

@@ -20,50 +20,56 @@ class VariantsRelationManager extends RelationManager
 
     protected static ?string $recordTitleAttribute = 'name';
 
-  public function form(Schema $schema): Schema
-{
-    return $schema
-     ->columns(1)
-        ->schema([
-            Grid::make(2)->schema([
-                TextInput::make('name')
-                    ->required()
-                    ->placeholder('e.g., Red - Large')
-                    ->maxLength(255),
+public function form(Schema $schema): Schema
+    {
+        return $schema
+            ->columns(1)
+            ->schema([
+                \Filament\Schemas\Components\Grid::make(2)->schema([
+                    \Filament\Forms\Components\TextInput::make('name')
+                        ->required()
+                        ->placeholder('e.g., Red - Large'),
 
-                TextInput::make('sku')
-                    ->required()
-                    ->unique(ignoreRecord: true)
-                    ->maxLength(255),
+                    \Filament\Forms\Components\TextInput::make('sku')
+                        ->required()
+                        ->unique(ignoreRecord: true),
 
-                TextInput::make('mrp')
-                    ->label('Variant MRP')
-                    ->numeric()
-                    ->prefix('₹'),
+                    // --- NEW IMAGE UPLOAD FOR VARIANT ---
+                    \Filament\Forms\Components\FileUpload::make('image')
+                        ->label('Variant Image (Optional)')
+                        ->image()
+                        ->directory('products/variants')
+                        ->columnSpanFull(), // Makes the image upload take the full width
+                    // ------------------------------------
 
-                TextInput::make('selling_price')
-                    ->label('Variant Selling Price')
-                    ->numeric()
-                    ->default(0.00)
-                    ->required()
-                    ->prefix('₹'),
+                    \Filament\Forms\Components\TextInput::make('mrp')
+                        ->label('Variant MRP')
+                        ->numeric()
+                        ->prefix('₹'),
 
-                TextInput::make('stock_quantity')
-                    ->numeric()
-                    ->default(0),
+                    \Filament\Forms\Components\TextInput::make('selling_price')
+                        ->label('Variant Selling Price')
+                        ->numeric()
+                        ->default(0.00)
+                        ->required()
+                        ->prefix('₹'),
 
-                Toggle::make('is_active')
-                    ->default(true),
-            ]),
+                    \Filament\Forms\Components\TextInput::make('stock_quantity')
+                        ->numeric()
+                        ->default(0),
 
-            KeyValue::make('attributes')
-                ->label('Variant Attributes (Dynamic)')
-                ->keyLabel('Type (e.g., Size, Color)')
-                ->valueLabel('Value (e.g., XL, Blue)')
-                ->addActionLabel('Add Attribute')
-                ->columnSpanFull(),
-        ]);
-}
+                    \Filament\Forms\Components\Toggle::make('is_active')
+                        ->default(true),
+                ]),
+
+                \Filament\Forms\Components\KeyValue::make('attributes')
+                    ->label('Variant Attributes (Dynamic)')
+                    ->keyLabel('Type (e.g., Size, Color)')
+                    ->valueLabel('Value (e.g., XL, Blue)')
+                    ->addActionLabel('Add Attribute')
+                    ->columnSpanFull(),
+            ]);
+    }
 
     public function table(Table $table): Table
     {
