@@ -5,12 +5,14 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\LeadController;
+use App\Http\Controllers\Api\DemoRequestController;
 
 // ----------------------------------------------------
 // PUBLIC ROUTES
 // ----------------------------------------------------
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/leads', [LeadController::class, 'store']);
+Route::post('/demo-requests', [DemoRequestController::class, 'store']);
 
 // ----------------------------------------------------
 // PROTECTED ROUTES (Sanctum SPA Authentication)
