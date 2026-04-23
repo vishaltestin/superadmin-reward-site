@@ -20,8 +20,15 @@ class CompanyResource extends JsonResource
             'pan_no' => $this->pan_no,
             'address' => $this->address,
             'points_name' => $this->points_name,
-            'wallet_balance' => (float) $this->balance, 
+            'wallet_balance' => (float) $this->balance,
             'is_approved' => $this->is_approved,
+            
+            'social_links' => $this->social_links ?? [],
+            'terms_text' => $this->terms_text,
+            'privacy_text' => $this->privacy_text,
+            
+            'hidden_category_ids' => $this->hidden_category_ids ?? [],
+            'hidden_product_ids' => $this->hidden_product_ids ?? [],
         ];
     }
 }

@@ -121,6 +121,7 @@ class CompanyForm
 
                         FileUpload::make('logo')
                             ->image()
+                            ->disk('public')
                             ->directory('company-logos')
                             ->columnSpanFull(),
 

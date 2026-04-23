@@ -40,6 +40,7 @@ protected static ?string $inverseRelationship = 'customProducts';
                     FileUpload::make('override_image')
                         ->label('Custom Main Image')
                         ->image()
+                        ->disk('public')
                         ->directory('products/overrides'),
 
                     TextInput::make('override_mrp')
@@ -90,7 +91,7 @@ protected static ?string $inverseRelationship = 'customProducts';
                         $action->getRecordSelect(),
                         Toggle::make('is_excluded')->label('Exclude Product completely?')->columnSpanFull(),
                         TextInput::make('override_name')->label('Override Name'),
-                        FileUpload::make('override_image')->image()->directory('products/overrides'),
+                        FileUpload::make('override_image')->image()->disk('public')->directory('products/overrides'),
                         TextInput::make('override_mrp')->numeric()->prefix('₹'),
                         TextInput::make('override_selling_price')->numeric()->prefix('₹'),
                     ]),

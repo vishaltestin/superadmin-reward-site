@@ -68,7 +68,7 @@ class ProductForm
         ->label('Brand')
         ->createOptionForm([ // <-- This allows Admins to create a Brand instantly without leaving the page!
             TextInput::make('name')->required(),
-            FileUpload::make('logo')->image()->directory('brands'),
+            FileUpload::make('logo')->image()->disk('public')->directory('brands'),
             Toggle::make('is_active')->default(true),
         ]),
         TextInput::make('warranty_info')
@@ -155,11 +155,13 @@ class ProductForm
                         ->schema([
                             FileUpload::make('main_image')
                                 ->image()
+                                ->disk('public')
                                 ->directory('products/main')
                                 ->columnSpanFull(),
 
                             FileUpload::make('gallery_images')
                                 ->image()
+                                ->disk('public')
                                 ->multiple()
                                 ->directory('products/gallery')
                                 ->columnSpanFull(),

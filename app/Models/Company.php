@@ -23,6 +23,11 @@ class Company extends Model
         'point_multiplier',
         'is_active',
         'is_approved',
+        'social_links',
+        'terms_text',
+        'privacy_text',
+        'hidden_category_ids',
+        'hidden_product_ids',
     ];
 
     protected function casts(): array
@@ -30,7 +35,10 @@ class Company extends Model
         return [
             'is_active' => 'boolean',
             'is_approved' => 'boolean',
-            'point_multiplier' => 'float', // <-- Added here
+            'point_multiplier' => 'float',
+            'social_links' => 'array',
+        'hidden_category_ids' => 'array',
+        'hidden_product_ids' => 'array',
         ];
     }
     protected static function booted()

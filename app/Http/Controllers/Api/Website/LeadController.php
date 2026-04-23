@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\Api\Website;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -10,7 +10,6 @@ class LeadController extends Controller
 {
     public function store(Request $request)
     {
-        // Matches your React Zod Schema exactly
         $validated = $request->validate([
             'first_name' => 'required|string|min:2|max:255',
             'last_name' => 'required|string|min:2|max:255',
@@ -22,7 +21,6 @@ class LeadController extends Controller
             'department' => 'required|string|min:2|max:255',
         ]);
 
-        // Lock the status to pending to prevent malicious payload injection
         $validated['status'] = 'pending';
 
         Lead::create($validated);

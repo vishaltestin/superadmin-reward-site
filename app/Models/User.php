@@ -12,7 +12,7 @@ use App\Traits\HasWallet;
 
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'company_id', 'user_type', 'first_name', 'last_name', 'mobile', 'is_active'])]
+#[Fillable(['name', 'email', 'password', 'company_id', 'user_type', 'first_name', 'last_name', 'mobile','gender', 'dob', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {

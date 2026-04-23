@@ -87,7 +87,7 @@ class LandingPageTemplateForm
                         ->schema([
                             TextInput::make('seo_meta.title')->label('SEO Title'),
                             Textarea::make('seo_meta.description')->label('SEO Description')->rows(2),
-                            FileUpload::make('seo_meta.og_image')->label('Social Share Image')->image(),
+                            FileUpload::make('seo_meta.og_image')->label('Social Share Image')->image()->disk('public')->directory('seo'),
                         ]),
                 ]),
 

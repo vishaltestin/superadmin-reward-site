@@ -38,6 +38,7 @@ public function form(Schema $schema): Schema
                     \Filament\Forms\Components\FileUpload::make('image')
                         ->label('Variant Image (Optional)')
                         ->image()
+                        ->disk('public')
                         ->directory('products/variants')
                         ->columnSpanFull(), // Makes the image upload take the full width
                     // ------------------------------------

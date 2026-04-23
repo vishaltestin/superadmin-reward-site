@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\Api\Website;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -23,10 +23,8 @@ class DemoRequestController extends Controller
 
         DemoRequest::create($validated);
 
-        // Optional: Trigger a Laravel Event here to Slack/Email your Sales Team!
-
         return response()->json([
-            'message' => 'Demo request received! Our sales team will contact you shortly to schedule a call.'
+            'message' => 'Demo request received! Our sales team will contact you shortly.'
         ], 201);
     }
 }
