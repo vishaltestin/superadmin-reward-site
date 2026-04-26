@@ -20,6 +20,7 @@ use Illuminate\Support\Str;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TimePicker;
 use Filament\Forms\Components\ColorPicker;
+use Illuminate\Database\Eloquent\Builder;
 
 class ProductForm
 {
@@ -54,8 +55,8 @@ class ProductForm
 
                                 TextInput::make('slug')
                                     ->required()
-                                    ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at'))
-                                    ->readOnly(fn (string $operation): bool => $operation === 'edit'),
+                                    ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at')),
+                                    // ->readOnly(fn (string $operation): bool => $operation === 'edit'),
 
                                 TextInput::make('sku')
                                     ->label('Global SKU')
@@ -100,23 +101,32 @@ class ProductForm
                             ]),
                         ]),
 
-                    // TAB 2: Taxonomy & Tagging
                    Tab::make('Taxonomy & Tags')
                         ->icon('heroicon-o-rectangle-stack')
                         ->schema([
                             Select::make('category_id')
-                                ->relationship('primaryCategory', 'name')
-                                ->searchable()
-                                ->preload()
-                                ->required()
-                                ->label('Primary Category'),
+    ->relationship(
+        name: 'primaryCategory', 
+        titleAttribute: 'name',
+        modifyQueryUsing: fn (Builder $query) => $query->with('parent') 
+    )
+    ->getOptionLabelFromRecordUsing(fn ($record) => $record->tree_name)
+    ->searchable()
+    ->preload()
+    ->required()
+    ->label('Primary Category'),
 
-                            Select::make('secondaryCategories')
-                                ->relationship('secondaryCategories', 'name')
-                                ->multiple()
-                                ->searchable()
-                                ->preload()
-                                ->label('Secondary Categories'),
+Select::make('secondaryCategories')
+    ->relationship(
+        name: 'secondaryCategories', 
+        titleAttribute: 'name',
+        modifyQueryUsing: fn (Builder $query) => $query->with('parent')
+    )
+    ->getOptionLabelFromRecordUsing(fn ($record) => $record->tree_name)
+    ->multiple()
+    ->searchable()
+    ->preload()
+    ->label('Secondary Categories'),
                                 
                             TagsInput::make('tags')
                                 ->label('Product Tags')
@@ -156,12 +166,14 @@ class ProductForm
                             FileUpload::make('main_image')
                                 ->image()
                                 ->disk('public')
+                                ->visibility('public')
                                 ->directory('products/main')
                                 ->columnSpanFull(),
 
                             FileUpload::make('gallery_images')
                                 ->image()
                                 ->disk('public')
+                                ->visibility('public')
                                 ->multiple()
                                 ->directory('products/gallery')
                                 ->columnSpanFull(),

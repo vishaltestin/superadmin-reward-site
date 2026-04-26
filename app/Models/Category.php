@@ -59,4 +59,18 @@ class Category extends Model
     {
         return $this->belongsToMany(Product::class, 'category_product');
     }
+
+    public function getTreeNameAttribute()
+    {
+        $name = $this->name;
+        $parent = $this->parent;
+
+        // Loop through parents until we reach the top level
+        while ($parent) {
+            $name = $parent->name . ' > ' . $name;
+            $parent = $parent->parent;
+        }
+
+        return $name;
+    }
 }

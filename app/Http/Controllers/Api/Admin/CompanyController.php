@@ -70,4 +70,35 @@ class CompanyController extends Controller
             'company' => new CompanyResource($request->user()->company)
         ]);
     }
+
+
+public function getCatalogConfig(Request $request)
+{
+    $company = $request->user()->company;
+
+    $categories = $company->categories()
+        ->where('is_active', true)
+        ->with(['primaryProducts' => function($query) use ($company) {
+            $query->where('is_active', true)
+                  ->whereDoesntHave('customCompanies', function($q) use ($company) {
+                      $q->where('company_id', $company->id)->where('is_excluded', true);
+                  })
+                  ->select('products.id', 'products.category_id', 'products.name', 'products.main_image', 'products.selling_price', 'products.mrp');
+        }])
+        ->with(['secondaryProducts' => function($query) use ($company) {
+            $query->where('is_active', true)
+                  ->whereDoesntHave('customCompanies', function($q) use ($company) {
+                      $q->where('company_id', $company->id)->where('is_excluded', true);
+                  })
+                  ->select('products.id', 'products.name', 'products.main_image', 'products.selling_price', 'products.mrp'); 
+        }])
+        ->select('categories.id', 'categories.name', 'categories.parent_id')
+        ->get();
+
+    return response()->json([
+        'categories' => $categories,
+        'hidden_category_ids' => $company->hidden_category_ids ?? [],
+        'hidden_product_ids' => $company->hidden_product_ids ?? [],
+    ]);
+}
 }

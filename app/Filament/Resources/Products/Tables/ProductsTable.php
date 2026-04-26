@@ -22,6 +22,7 @@ class ProductsTable
             ->columns([
                 ImageColumn::make('main_image')
                     ->circular()
+                    ->disk('public')
                     ->defaultImageUrl(url('/placeholder-product.png')),
 
                 TextColumn::make('name')

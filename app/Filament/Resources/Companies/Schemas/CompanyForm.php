@@ -64,13 +64,18 @@ class CompanyForm
                             ->columnSpanFull(),
 
                         Select::make('categories')
-                            ->relationship('categories', 'name')
-                            ->multiple()
-                            ->preload()
-                            ->searchable()
-                            ->label('Allowed Product Categories')
-                            ->helperText('Select which product categories this company can access.')
-                            ->columnSpanFull(),
+    ->relationship(
+        name: 'categories', 
+        titleAttribute: 'name',
+        modifyQueryUsing: fn ($query) => $query->with('parent')
+    )
+    ->getOptionLabelFromRecordUsing(fn ($record) => $record->tree_name)
+    ->multiple()
+    ->preload()
+    ->searchable()
+    ->label('Allowed Product Categories')
+    ->helperText('Select which product categories this company can access.')
+    ->columnSpanFull()
                         ]),
                     ]),
 

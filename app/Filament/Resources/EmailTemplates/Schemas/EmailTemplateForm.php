@@ -12,6 +12,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
+use Filament\Forms\Components\FileUpload;
 
 class EmailTemplateForm
 {
@@ -76,6 +77,14 @@ class EmailTemplateForm
                         TextInput::make('subject')
                             ->required()
                             ->placeholder('e.g., Welcome to the team, {{ first_name }}!'),
+
+                        FileUpload::make('thumbnail_path')
+                                        ->label('Template Thumbnail')
+                                        ->image()
+                                        ->disk('public')
+                                        ->directory('templates/thumbnails')
+                                        ->columnSpan(1)
+                                        ->helperText('This preview image will be visible in the Frontend Admin Portal.'),
                     ]),
                 ]),
 

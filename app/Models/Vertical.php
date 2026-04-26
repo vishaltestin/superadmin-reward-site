@@ -4,6 +4,7 @@ namespace App\Models;
 use App\Helpers\SlugHelper;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Vertical extends Model
 {
@@ -28,5 +29,12 @@ class Vertical extends Model
     public function companies()
     {
         return $this->belongsToMany(Company::class);
+    }
+    /**
+     * Get the events associated with the vertical.
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class);
     }
 }

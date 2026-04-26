@@ -10,8 +10,11 @@ use App\Http\Controllers\Api\Admin\CompanyController;
 
 use App\Http\Controllers\Api\Storefront\StorefrontAuthController;
 use App\Http\Controllers\Api\Storefront\PromotionController;
+
 use App\Http\Controllers\Api\Admin\EmployeeController;
 use App\Http\Controllers\Api\Admin\SubAdminController;
+use App\Http\Controllers\Api\Admin\EmailTemplateController;
+
 
 use App\Http\Controllers\Api\ProfileController;
 use App\Models\Vertical;
@@ -24,26 +27,65 @@ Route::prefix('admin')->group(function () {
 
     Route::middleware(['auth:sanctum', 'is.admin'])->group(function () {
         Route::post('/auth/logout', [AdminAuthController::class, 'logout']);
-        Route::get('/profile/me', [ProfileController::class, 'me']);
-        Route::put('/profile/update', [ProfileController::class, 'update']);
-        Route::post('/profile/change-password', [ProfileController::class, 'changePassword']);
-
-        Route::get('/verticals', function () {
-            return response()->json(\App\Models\Vertical::where('is_active', true)->get());
+        Route::prefix('profile')->group(function () {
+            Route::get('/me', [ProfileController::class, 'me']);
+            Route::put('/update', [ProfileController::class, 'update']);
+            Route::post('/change-password', [ProfileController::class, 'changePassword']);
         });
 
-        Route::get('/employees', [EmployeeController::class, 'index']);
-        Route::post('/employees', [EmployeeController::class, 'store']);
-        Route::put('/employees/{id}', [EmployeeController::class, 'update']);
-        Route::post('/employees/bulk-upload', [EmployeeController::class, 'bulkUpload']);
+
+        Route::get('/verticals', function (Illuminate\Http\Request $request) {
+            $user = $request->user();
+            
+            if ($user->user_type === 'sub_admin') {
+                $assignedVerticals = $user->managedVerticals()
+                    ->where('is_active', true)
+                    ->get(['verticals.id', 'verticals.name', 'verticals.slug']); 
+                    
+                return response()->json($assignedVerticals);
+            }
+            $companyVerticals = $user->company->verticals()
+                ->where('verticals.is_active', true)
+                ->get(['verticals.id', 'verticals.name', 'verticals.slug']);
+                
+            return response()->json($companyVerticals);
+        });
+
+        Route::prefix('employees')->group(function () {
+            Route::get('/', [EmployeeController::class, 'index']);
+            Route::post('/', [EmployeeController::class, 'store']);
+            Route::put('/{id}', [EmployeeController::class, 'update']);
+            Route::post('/bulk-upload', [EmployeeController::class, 'bulkUpload']);
+        });
+        Route::prefix('email-templates')->group(function () {
+    Route::get('/sidebar-events', [EmailTemplateController::class, 'getSidebarEvents']);
+    
+    Route::get('/', [EmailTemplateController::class, 'index']);
+    
+    // 3. CRUD for Variations
+    Route::get('/{id}', [EmailTemplateController::class, 'show']);
+    Route::put('/{id}', [EmailTemplateController::class, 'update']);
+    Route::delete('/{id}', [EmailTemplateController::class, 'destroy']);
+    
+    Route::post('/{id}/duplicate', [EmailTemplateController::class, 'duplicateMaster']);
+    Route::post('/upload-image', [EmailTemplateController::class, 'uploadImage']);
+});
+
 
         Route::middleware(['role:business_head'])->group(function () {
-            Route::get('/sub-admins', [SubAdminController::class, 'index']);
-            Route::post('/sub-admins', [SubAdminController::class, 'store']);
-            Route::put('/sub-admins/{id}', [SubAdminController::class, 'update']);
-            Route::put('/company/business-details', [CompanyController::class, 'updateBusinessDetails']);
-            Route::post('/company/storefront-settings', [CompanyController::class, 'updateStorefrontSettings']);
-            Route::put('/company/catalog-visibility', [CompanyController::class, 'updateCatalogVisibility']);
+            
+            Route::prefix('sub-admins')->group(function () {
+                Route::get('/', [SubAdminController::class, 'index']);
+                Route::post('/', [SubAdminController::class, 'store']);
+                Route::put('/{id}', [SubAdminController::class, 'update']);
+            });
+
+            Route::prefix('company')->group(function () {
+                Route::put('/business-details', [CompanyController::class, 'updateBusinessDetails']);
+                Route::post('/storefront-settings', [CompanyController::class, 'updateStorefrontSettings']);
+                Route::get('/catalog-config', [CompanyController::class, 'getCatalogConfig']);
+                Route::put('/catalog-visibility', [CompanyController::class, 'updateCatalogVisibility']);
+            });
         });
     });
 });

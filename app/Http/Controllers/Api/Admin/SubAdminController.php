@@ -42,9 +42,11 @@ class SubAdminController extends Controller
                 'user_type'  => 'sub_admin',
                 'first_name' => $validated['first_name'],
                 'last_name'  => $validated['last_name'],
+                'name'       => $validated['first_name'] . ' ' . $validated['last_name'],
                 'email'      => $validated['email'],
                 'mobile'     => $validated['mobile'],
-                'password'   => Hash::make(Str::random(12)), // TODO: Trigger Welcome Email
+                // 'password'   => Hash::make(Str::random(12)), // TODO: Trigger Welcome Email
+                'password' => Hash::make('password123'),
                 'is_active'  => true,
             ]);
 

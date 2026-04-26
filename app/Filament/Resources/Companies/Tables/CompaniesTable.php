@@ -27,6 +27,7 @@ class CompaniesTable
         return $table->columns([
             ImageColumn::make('logo')
                 ->circular()
+                ->disk('public')
                 ->defaultImageUrl(url('/placeholder.png')),
 
             TextColumn::make('name')

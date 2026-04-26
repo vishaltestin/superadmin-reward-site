@@ -5,16 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class EmailTemplate extends Model
+class EventVariable extends Model
 {
     protected $fillable = [
         'event_id',
-        'company_id',
         'name',
-        'subject',
-        'html_body',
-        'design_json',      
-        'thumbnail_path',   
+        'value',
         'is_active',
     ];
 
@@ -22,17 +18,12 @@ class EmailTemplate extends Model
     {
         return [
             'is_active' => 'boolean',
-            'design_json' => 'array',
         ];
     }
 
+    // A variable might belong to a specific event
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
-    }
-
-    public function company(): BelongsTo
-    {
-        return $this->belongsTo(Company::class);
     }
 }
