@@ -41,8 +41,10 @@ class EmailTemplateController extends Controller
             return response()->json(['message' => 'Unauthorized vertical access.'], 403);
         }
 
-        // Fetch Global Variables (event_id is null) OR Variables belonging to this template's event
+        // THE FIX: Fetch Global Variables OR Variables belonging to this template's event
+        // AND strictly filter by usage_type!
         $variables = \App\Models\EventVariable::where('is_active', true)
+            ->whereIn('usage_type', ['email', 'both']) // <-- Added Filter!
             ->where(function ($query) use ($template) {
                 $query->whereNull('event_id')
                       ->orWhere('event_id', $template->event_id);
@@ -60,66 +62,63 @@ class EmailTemplateController extends Controller
      * Generate the highly nested JSON for the React Sidebar.
      */
     public function getSidebarEvents(Request $request)
-{
-    $user = $request->user();
-    $companyId = $user->company_id;
-    $verticalIds = $this->getAccessibleVerticalIds($user);
+    {
+        $user = $request->user();
+        $companyId = $user->company_id;
+        $verticalIds = $this->getAccessibleVerticalIds($user);
 
-    // OPTIMIZATION: Get all template counts for this company in ONE single query
-    // This returns an array like: [ event_id => count, event_id => count ]
-    $variationCounts = \App\Models\EmailTemplate::where('company_id', $companyId)
-        ->selectRaw('event_id, count(*) as count')
-        ->groupBy('event_id')
-        ->pluck('count', 'event_id');
+        // OPTIMIZATION: Get all template counts for this company in ONE single query
+        $variationCounts = \App\Models\EmailTemplate::where('company_id', $companyId)
+            ->selectRaw('event_id, count(*) as count')
+            ->groupBy('event_id')
+            ->pluck('count', 'event_id');
 
-    // Fetch verticals, but ONLY load top-level events (parent_id is null) and eager load their children
-    $verticals = Vertical::whereIn('id', $verticalIds)
-        ->where('is_active', true)
-        ->with(['events' => function ($query) {
-            $query->whereNull('parent_id') // Only get top-level folders or direct flat events
-                  ->where('is_active', true)
-                  ->with('children'); // Load the sub-events if it's a folder
-        }])
-        ->get();
+        // Fetch verticals, but ONLY load top-level events (parent_id is null) and eager load their children
+        $verticals = Vertical::whereIn('id', $verticalIds)
+            ->where('is_active', true)
+            ->with(['events' => function ($query) {
+                $query->whereNull('parent_id') 
+                      ->where('is_active', true)
+                      ->with('children'); 
+            }])
+            ->get();
 
-    // Map the data into a UI-friendly structure for React
-    $sidebarData = $verticals->map(function ($vertical) use ($variationCounts) {
-        $items = [];
+        // Map the data into a UI-friendly structure for React
+        $sidebarData = $verticals->map(function ($vertical) use ($variationCounts) {
+            $items = [];
 
-        foreach ($vertical->events as $event) {
-            if ($event->children->count() > 0) {
-                // SCENARIO A: It's a Group/Folder (e.g., "Marketing", "Sales")
-                $items[] = [
-                    'type' => 'group',
-                    'title' => $event->title, // "Marketing"
-                    'events' => $event->children->map(function ($child) use ($variationCounts) {
-                        return [
-                            'id' => $child->id,
-                            'title' => $child->title, // "Digital Campaign - Lead Gen"
-                            'variation_count' => $variationCounts->get($child->id, 0),
-                        ];
-                    })->values()
-                ];
-            } else {
-                // SCENARIO B: It's a Flat Event (e.g., "New Joinee")
-                $items[] = [
-                    'type' => 'event',
-                    'id' => $event->id,
-                    'title' => $event->title, // "New Joinee"
-                    'variation_count' => $variationCounts->get($event->id, 0),
-                ];
+            foreach ($vertical->events as $event) {
+                if ($event->children->count() > 0) {
+                    $items[] = [
+                        'type' => 'group',
+                        'title' => $event->title,
+                        'events' => $event->children->map(function ($child) use ($variationCounts) {
+                            return [
+                                'id' => $child->id,
+                                'title' => $child->title,
+                                'variation_count' => $variationCounts->get($child->id, 0),
+                            ];
+                        })->values()
+                    ];
+                } else {
+                    $items[] = [
+                        'type' => 'event',
+                        'id' => $event->id,
+                        'title' => $event->title, 
+                        'variation_count' => $variationCounts->get($event->id, 0),
+                    ];
+                }
             }
-        }
 
-        return [
-            'id' => $vertical->id,
-            'name' => $vertical->name,
-            'items' => $items,
-        ];
-    });
+            return [
+                'id' => $vertical->id,
+                'name' => $vertical->name,
+                'items' => $items,
+            ];
+        });
 
-    return response()->json(['data' => $sidebarData]);
-}
+        return response()->json(['data' => $sidebarData]);
+    }
 
     /**
      * Fetch templates for the Grid view based on the selected Tab and Event.
@@ -147,10 +146,8 @@ class EmailTemplateController extends Controller
                               ->where('is_active', true);
 
         if ($tab === 'global') {
-            // Master templates belong to the system (company_id is null)
             $query->whereNull('company_id');
         } else {
-            // Variations belong to the specific tenant
             $query->where('company_id', $companyId);
         }
 
@@ -168,7 +165,6 @@ class EmailTemplateController extends Controller
         
         $masterTemplate = EmailTemplate::whereNull('company_id')->findOrFail($id);
 
-        // Security Check: Can they access this vertical?
         if (!in_array($masterTemplate->event->vertical_id, $this->getAccessibleVerticalIds($user))) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
@@ -176,11 +172,11 @@ class EmailTemplateController extends Controller
         $variation = DB::transaction(function () use ($masterTemplate, $user) {
             return EmailTemplate::create([
                 'event_id' => $masterTemplate->event_id,
-                'company_id' => $user->company_id, // Assign to tenant!
+                'company_id' => $user->company_id,
                 'name' => 'Copy of ' . $masterTemplate->name,
                 'subject' => $masterTemplate->subject,
                 'html_body' => $masterTemplate->html_body,
-                'design_json' => $masterTemplate->design_json, // Copy GrapesJS state
+                'design_json' => $masterTemplate->design_json, 
                 'is_active' => true,
             ]);
         });
@@ -223,28 +219,26 @@ class EmailTemplateController extends Controller
     {
         $user = $request->user();
         
-        // Strict scope: You can only delete your own company's templates.
         $template = EmailTemplate::where('company_id', $user->company_id)->findOrFail($id);
-        
         $template->delete();
 
         return response()->json(['message' => 'Template deleted.']);
     }
 
     public function uploadImage(Request $request)
-{
-    $request->validate([
-        'files' => 'required|array',
-        'files.*' => 'image|mimes:jpeg,png,jpg,gif,svg|max:2048'
-    ]);
+    {
+        $request->validate([
+            'files' => 'required|array',
+            'files.*' => 'image|mimes:jpeg,png,jpg,gif,svg|max:2048'
+        ]);
 
-    $urls = [];
+        $urls = [];
 
-    foreach ($request->file('files') as $file) {
-        $path = $file->store('email-assets', 'public');
-        $urls[] = asset('storage/' . $path); 
+        foreach ($request->file('files') as $file) {
+            $path = $file->store('email-assets', 'public');
+            $urls[] = asset('storage/' . $path); 
+        }
+
+        return response()->json(['data' => $urls]);
     }
-
-    return response()->json(['data' => $urls]);
-}
 }

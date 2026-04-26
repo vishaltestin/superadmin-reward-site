@@ -1,26 +1,25 @@
 <?php
-
 namespace App\Filament\Resources\Products\Schemas;
 
+use Filament\Forms\Components\ColorPicker;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
-use Filament\Schemas\Components\Grid;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\RichEditor;
-use Filament\Schemas\Components\Section;
 use Filament\Forms\Components\Select;
-use Filament\Schemas\Components\Tabs;
-use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\TimePicker;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Str;
-use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\TimePicker;
-use Filament\Forms\Components\ColorPicker;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 
 class ProductForm
 {
@@ -29,15 +28,14 @@ class ProductForm
         return $schema->components([
             Tabs::make('Product Builder')
                 ->tabs([
-                    // TAB 1: Basic Identity & Pricing
-                   Tab::make('Core Details')
+                    Tab::make('Core Details')
                         ->icon('heroicon-o-information-circle')
                         ->schema([
                             Grid::make(2)->schema([
                                 Select::make('type')
                                     ->options([
-                                        'physical' => 'Physical Item',
-                                        'digital' => 'Digital Voucher',
+                                        'physical'   => 'Physical Item',
+                                        'digital'    => 'Digital Voucher',
                                         'experience' => 'Experience',
                                     ])
                                     ->required()
@@ -55,36 +53,36 @@ class ProductForm
 
                                 TextInput::make('slug')
                                     ->required()
-                                    ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->whereNull('deleted_at')),
-                                    // ->readOnly(fn (string $operation): bool => $operation === 'edit'),
+                                    ->unique(ignoreRecord: true, modifyRuleUsing: fn($rule) => $rule->whereNull('deleted_at')),
+                                // ->readOnly(fn (string $operation): bool => $operation === 'edit'),
 
                                 TextInput::make('sku')
                                     ->label('Global SKU')
                                     ->unique(ignoreRecord: true),
 
                                 Select::make('brand_id')
-        ->relationship('brand', 'name')
-        ->searchable()
-        ->preload()
-        ->label('Brand')
-        ->createOptionForm([ // <-- This allows Admins to create a Brand instantly without leaving the page!
-            TextInput::make('name')->required(),
-            FileUpload::make('logo')->image()->disk('public')->directory('brands'),
-            Toggle::make('is_active')->default(true),
-        ]),
-        TextInput::make('warranty_info')
-        ->label('Warranty Information')
-        ->placeholder('e.g., 1 Year Manufacturer Warranty')
-        ->columnSpanFull(),
+                                    ->relationship('brand', 'name')
+                                    ->searchable()
+                                    ->preload()
+                                    ->label('Brand')
+                                    ->createOptionForm([ // <-- This allows Admins to create a Brand instantly without leaving the page!
+                                        TextInput::make('name')->required(),
+                                        FileUpload::make('logo')->image()->disk('public')->directory('brands'),
+                                        Toggle::make('is_active')->default(true),
+                                    ]),
+                                TextInput::make('warranty_info')
+                                    ->label('Warranty Information')
+                                    ->placeholder('e.g., 1 Year Manufacturer Warranty')
+                                    ->columnSpanFull(),
 
                                 Section::make('Fiat Pricing Strategy')
-                                ->columnSpanFull()
+                                    ->columnSpanFull()
                                     ->schema([
                                         TextInput::make('mrp')
                                             ->label('MRP (Crossed-out)')
                                             ->numeric()
                                             ->prefix('₹'),
-                                            
+
                                         TextInput::make('selling_price')
                                             ->label('Actual Selling Price')
                                             ->numeric()
@@ -92,50 +90,49 @@ class ProductForm
                                             ->default(0.00)
                                             ->prefix('₹'),
                                         TextInput::make('gst_percentage')
-                ->label('GST (%)')
-                ->numeric()
-                ->default(0.00)
-                ->suffix('%')
-                ->helperText('Used for invoicing and taxation.'),
+                                            ->label('GST (%)')
+                                            ->numeric()
+                                            ->default(0.00)
+                                            ->suffix('%')
+                                            ->helperText('Used for invoicing and taxation.'),
                                     ])->columns(3),
                             ]),
                         ]),
 
-                   Tab::make('Taxonomy & Tags')
+                    Tab::make('Taxonomy & Tags')
                         ->icon('heroicon-o-rectangle-stack')
                         ->schema([
                             Select::make('category_id')
-    ->relationship(
-        name: 'primaryCategory', 
-        titleAttribute: 'name',
-        modifyQueryUsing: fn (Builder $query) => $query->with('parent') 
-    )
-    ->getOptionLabelFromRecordUsing(fn ($record) => $record->tree_name)
-    ->searchable()
-    ->preload()
-    ->required()
-    ->label('Primary Category'),
+                                ->relationship(
+                                    name: 'primaryCategory',
+                                    titleAttribute: 'name',
+                                    modifyQueryUsing: fn(Builder $query) => $query->with('parent')
+                                )
+                                ->getOptionLabelFromRecordUsing(fn($record) => $record->tree_name)
+                                ->searchable()
+                                ->preload()
+                                ->required()
+                                ->label('Primary Category'),
 
-Select::make('secondaryCategories')
-    ->relationship(
-        name: 'secondaryCategories', 
-        titleAttribute: 'name',
-        modifyQueryUsing: fn (Builder $query) => $query->with('parent')
-    )
-    ->getOptionLabelFromRecordUsing(fn ($record) => $record->tree_name)
-    ->multiple()
-    ->searchable()
-    ->preload()
-    ->label('Secondary Categories'),
-                                
+                            Select::make('secondaryCategories')
+                                ->relationship(
+                                    name: 'secondaryCategories',
+                                    titleAttribute: 'name',
+                                    modifyQueryUsing: fn(Builder $query) => $query->with('parent')
+                                )
+                                ->getOptionLabelFromRecordUsing(fn($record) => $record->tree_name)
+                                ->multiple()
+                                ->searchable()
+                                ->preload()
+                                ->label('Secondary Categories'),
+
                             TagsInput::make('tags')
                                 ->label('Product Tags')
                                 ->placeholder('e.g., bestseller, new-arrival')
                                 ->helperText('Loose keywords for internal search and storefront filtering.'),
                         ]),
 
-                    // TAB 3: Content & Specs
-                   Tab::make('Content & Specs')
+                    Tab::make('Content & Specs')
                         ->icon('heroicon-o-document-text')
                         ->schema([
                             TextInput::make('short_description')
@@ -155,12 +152,11 @@ Select::make('secondaryCategories')
                                 ->columnSpanFull(),
 
                             RichEditor::make('terms_and_conditions')
-                                ->visible(fn (Get $get) => $get('type') === 'digital')
+                                ->visible(fn(Get $get) => $get('type') === 'digital')
                                 ->columnSpanFull(),
                         ]),
 
-                    // TAB 4: Media
-                   Tab::make('Media & Visibility')
+                    Tab::make('Media & Visibility')
                         ->icon('heroicon-o-photo')
                         ->schema([
                             FileUpload::make('main_image')
@@ -177,32 +173,29 @@ Select::make('secondaryCategories')
                                 ->multiple()
                                 ->directory('products/gallery')
                                 ->columnSpanFull(),
-                            
+
                             TextInput::make('video_url')
-        ->label('Promo Video URL')
-        ->placeholder('https://youtube.com/watch?...')
-        ->url()
-        ->columnSpanFull(),
-        TextInput::make('sort_order')
-        ->label('Storefront Sort Priority')
-        ->numeric()
-        ->default(0)
-        ->helperText('Higher numbers appear first. 0 is default.'),
+                                ->label('Promo Video URL')
+                                ->placeholder('https://youtube.com/watch?...')
+                                ->url()
+                                ->columnSpanFull(),
+                            TextInput::make('sort_order')
+                                ->label('Storefront Sort Priority')
+                                ->numeric()
+                                ->default(0)
+                                ->helperText('Higher numbers appear first. 0 is default.'),
 
                             Toggle::make('is_active')
                                 ->default(true)
                                 ->columnSpanFull(),
                         ]),
 
-                    // TAB 5: Specific Type Data
                     Tab::make('Specific Details')
-                    ->visible(fn (Get $get) => $get('type') !== 'physical')
+                        ->visible(fn(Get $get) => $get('type') !== 'physical')
                         ->icon('heroicon-o-adjustments-horizontal')
                         ->schema([
-                            
-                            // --- VOUCHER FIELDS ---
                             Section::make('Voucher / Offer Details')
-                                ->visible(fn (Get $get) => $get('type') === 'digital')
+                                ->visible(fn(Get $get) => $get('type') === 'digital')
                                 ->schema([
                                     Grid::make(2)->schema([
                                         TextInput::make('type_data.couponCode')->label('Coupon Code'),
@@ -220,9 +213,8 @@ Select::make('secondaryCategories')
                                     TextInput::make('type_data.address')->label('Full Address')->columnSpanFull(),
                                 ]),
 
-                            // --- TRAVEL EXPERIENCE FIELDS ---
-                            Section::make('Travel / Experience Details')
-                                ->visible(fn (Get $get) => $get('type') === 'experience')
+                                Section::make('Travel / Experience Details')
+                                ->visible(fn(Get $get) => $get('type') === 'experience')
                                 ->schema([
                                     Grid::make(2)->schema([
                                         TextInput::make('type_data.destination')->label('Destination (e.g., Wayanad, Kerala)'),
@@ -238,7 +230,7 @@ Select::make('secondaryCategories')
                                 ]),
                         ]),
                 ])->columnSpanFull(),
-                
+
         ]);
     }
 }

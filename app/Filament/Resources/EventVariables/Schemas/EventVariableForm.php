@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Filament\Resources\EventVariables\Schemas;
 
 use App\Models\Event;
@@ -15,11 +14,11 @@ class EventVariableForm
         return $schema
             ->components([
                 Select::make('event_id')
-                    ->label('Event')
+                    ->label('Event (Leave blank for Global)')
                     ->searchable()
                     ->preload()
                     ->options(function () {
-                        $events = Event::with(['vertical', 'parent'])->get();
+                        $events         = Event::with(['vertical', 'parent'])->get();
                         $groupedOptions = [];
 
                         foreach ($events as $event) {
@@ -42,6 +41,17 @@ class EventVariableForm
                     })
                     ->default(null),
 
+                // NEW FIELD: Usage Type
+                Select::make('usage_type')
+                    ->label('Where can this be used?')
+                    ->options([
+                        'both'         => 'Both (Email & Landing Page)',
+                        'email'        => 'Email Only',
+                        'landing_page' => 'Landing Page Only',
+                    ])
+                    ->default('both')
+                    ->required(),
+
                 TextInput::make('name')
                     ->required(),
 
@@ -49,6 +59,7 @@ class EventVariableForm
                     ->required(),
 
                 Toggle::make('is_active')
+                    ->default(true)
                     ->required(),
             ]);
     }

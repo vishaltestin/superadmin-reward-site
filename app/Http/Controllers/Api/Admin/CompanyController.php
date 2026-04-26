@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
@@ -23,7 +22,7 @@ class CompanyController extends Controller
 
         return response()->json([
             'message' => 'Business details updated successfully.',
-            'company' => new CompanyResource($request->user()->company)
+            'company' => new CompanyResource($request->user()->company),
         ]);
     }
 
@@ -38,7 +37,7 @@ class CompanyController extends Controller
             'social_links' => 'nullable|array',
             'logo'         => 'nullable|image|max:2048',
         ]);
-      
+
         if ($request->hasFile('logo')) {
             if ($company->logo) {
                 Storage::disk('public')->delete($company->logo);
@@ -50,7 +49,7 @@ class CompanyController extends Controller
 
         return response()->json([
             'message' => 'Storefront branding updated successfully.',
-            'company' => new CompanyResource($company)
+            'company' => new CompanyResource($company),
         ]);
     }
 
@@ -67,38 +66,37 @@ class CompanyController extends Controller
 
         return response()->json([
             'message' => 'Catalog visibility updated successfully.',
-            'company' => new CompanyResource($request->user()->company)
+            'company' => new CompanyResource($request->user()->company),
         ]);
     }
 
+    public function getCatalogConfig(Request $request)
+    {
+        $company = $request->user()->company;
 
-public function getCatalogConfig(Request $request)
-{
-    $company = $request->user()->company;
+        $categories = $company->categories()
+            ->where('is_active', true)
+            ->with(['primaryProducts' => function ($query) use ($company) {
+                $query->where('is_active', true)
+                    ->whereDoesntHave('customCompanies', function ($q) use ($company) {
+                        $q->where('company_id', $company->id)->where('is_excluded', true);
+                    })
+                    ->select('products.id', 'products.category_id', 'products.name', 'products.main_image', 'products.selling_price', 'products.mrp');
+            }])
+            ->with(['secondaryProducts' => function ($query) use ($company) {
+                $query->where('is_active', true)
+                    ->whereDoesntHave('customCompanies', function ($q) use ($company) {
+                        $q->where('company_id', $company->id)->where('is_excluded', true);
+                    })
+                    ->select('products.id', 'products.name', 'products.main_image', 'products.selling_price', 'products.mrp');
+            }])
+            ->select('categories.id', 'categories.name', 'categories.parent_id')
+            ->get();
 
-    $categories = $company->categories()
-        ->where('is_active', true)
-        ->with(['primaryProducts' => function($query) use ($company) {
-            $query->where('is_active', true)
-                  ->whereDoesntHave('customCompanies', function($q) use ($company) {
-                      $q->where('company_id', $company->id)->where('is_excluded', true);
-                  })
-                  ->select('products.id', 'products.category_id', 'products.name', 'products.main_image', 'products.selling_price', 'products.mrp');
-        }])
-        ->with(['secondaryProducts' => function($query) use ($company) {
-            $query->where('is_active', true)
-                  ->whereDoesntHave('customCompanies', function($q) use ($company) {
-                      $q->where('company_id', $company->id)->where('is_excluded', true);
-                  })
-                  ->select('products.id', 'products.name', 'products.main_image', 'products.selling_price', 'products.mrp'); 
-        }])
-        ->select('categories.id', 'categories.name', 'categories.parent_id')
-        ->get();
-
-    return response()->json([
-        'categories' => $categories,
-        'hidden_category_ids' => $company->hidden_category_ids ?? [],
-        'hidden_product_ids' => $company->hidden_product_ids ?? [],
-    ]);
-}
+        return response()->json([
+            'categories'          => $categories,
+            'hidden_category_ids' => $company->hidden_category_ids ?? [],
+            'hidden_product_ids'  => $company->hidden_product_ids ?? [],
+        ]);
+    }
 }

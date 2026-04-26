@@ -11,6 +11,7 @@ class EventVariable extends Model
         'event_id',
         'name',
         'value',
+        'usage_type',
         'is_active',
     ];
 

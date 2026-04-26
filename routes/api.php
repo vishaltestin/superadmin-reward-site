@@ -1,26 +1,17 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-
-use App\Http\Controllers\Api\Website\LeadController;
-use App\Http\Controllers\Api\Website\DemoRequestController;
-
 use App\Http\Controllers\Api\Admin\AdminAuthController;
 use App\Http\Controllers\Api\Admin\CompanyController;
-
-use App\Http\Controllers\Api\Storefront\StorefrontAuthController;
-use App\Http\Controllers\Api\Storefront\PromotionController;
-
-use App\Http\Controllers\Api\Admin\EmployeeController;
-use App\Http\Controllers\Api\Admin\SubAdminController;
 use App\Http\Controllers\Api\Admin\EmailTemplateController;
-
-
+use App\Http\Controllers\Api\Admin\EmployeeController;
+use App\Http\Controllers\Api\Admin\LandingPageController;
+use App\Http\Controllers\Api\Admin\SubAdminController;
 use App\Http\Controllers\Api\ProfileController;
-use App\Models\Vertical;
-
-
-
+use App\Http\Controllers\Api\Storefront\PromotionController;
+use App\Http\Controllers\Api\Storefront\StorefrontAuthController;
+use App\Http\Controllers\Api\Website\DemoRequestController;
+use App\Http\Controllers\Api\Website\LeadController;
+use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')->group(function () {
     Route::post('/auth/login', [AdminAuthController::class, 'login']);
@@ -33,21 +24,20 @@ Route::prefix('admin')->group(function () {
             Route::post('/change-password', [ProfileController::class, 'changePassword']);
         });
 
-
         Route::get('/verticals', function (Illuminate\Http\Request $request) {
             $user = $request->user();
-            
+
             if ($user->user_type === 'sub_admin') {
                 $assignedVerticals = $user->managedVerticals()
                     ->where('is_active', true)
-                    ->get(['verticals.id', 'verticals.name', 'verticals.slug']); 
-                    
+                    ->get(['verticals.id', 'verticals.name', 'verticals.slug']);
+
                 return response()->json($assignedVerticals);
             }
             $companyVerticals = $user->company->verticals()
                 ->where('verticals.is_active', true)
                 ->get(['verticals.id', 'verticals.name', 'verticals.slug']);
-                
+
             return response()->json($companyVerticals);
         });
 
@@ -58,22 +48,30 @@ Route::prefix('admin')->group(function () {
             Route::post('/bulk-upload', [EmployeeController::class, 'bulkUpload']);
         });
         Route::prefix('email-templates')->group(function () {
-    Route::get('/sidebar-events', [EmailTemplateController::class, 'getSidebarEvents']);
-    
-    Route::get('/', [EmailTemplateController::class, 'index']);
-    
-    // 3. CRUD for Variations
-    Route::get('/{id}', [EmailTemplateController::class, 'show']);
-    Route::put('/{id}', [EmailTemplateController::class, 'update']);
-    Route::delete('/{id}', [EmailTemplateController::class, 'destroy']);
-    
-    Route::post('/{id}/duplicate', [EmailTemplateController::class, 'duplicateMaster']);
-    Route::post('/upload-image', [EmailTemplateController::class, 'uploadImage']);
-});
+            Route::get('/sidebar-events', [EmailTemplateController::class, 'getSidebarEvents']);
 
+            Route::get('/', [EmailTemplateController::class, 'index']);
+
+            Route::get('/{id}', [EmailTemplateController::class, 'show']);
+            Route::put('/{id}', [EmailTemplateController::class, 'update']);
+            Route::delete('/{id}', [EmailTemplateController::class, 'destroy']);
+
+            Route::post('/{id}/duplicate', [EmailTemplateController::class, 'duplicateMaster']);
+            Route::post('/upload-image', [EmailTemplateController::class, 'uploadImage']);
+        });
+
+        Route::prefix('landing-pages')->group(function () {
+            Route::get('/sidebar-events', [LandingPageController::class, 'getSidebarEvents']);
+            Route::get('/', [LandingPageController::class, 'index']);
+            Route::get('/{id}', [LandingPageController::class, 'show']);
+            Route::put('/{id}', [LandingPageController::class, 'update']);
+            Route::delete('/{id}', [LandingPageController::class, 'destroy']);
+            Route::post('/{id}/duplicate', [LandingPageController::class, 'duplicateMaster']);
+            Route::post('/upload-image', [LandingPageController::class, 'uploadImage']);
+        });
 
         Route::middleware(['role:business_head'])->group(function () {
-            
+
             Route::prefix('sub-admins')->group(function () {
                 Route::get('/', [SubAdminController::class, 'index']);
                 Route::post('/', [SubAdminController::class, 'store']);
@@ -90,31 +88,10 @@ Route::prefix('admin')->group(function () {
     });
 });
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Route::prefix('website')->group(function () {
     Route::post('/leads', [LeadController::class, 'store']);
     Route::post('/demo-requests', [DemoRequestController::class, 'store']);
 });
-
 
 Route::prefix('storefront')->group(function () {
     Route::post('/auth/login', [StorefrontAuthController::class, 'login']);

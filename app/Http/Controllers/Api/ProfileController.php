@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
@@ -30,7 +29,7 @@ class ProfileController extends Controller
 
         return response()->json([
             'message' => 'Profile retrieved successfully',
-            'data' => new UserResource($user)
+            'data'    => new UserResource($user),
         ]);
     }
 
@@ -42,19 +41,19 @@ class ProfileController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name'  => 'required|string|max:255',
-            'Gender'     => 'required|string|max:50',
-            'dob'        => 'required|date',
-            'mobile'     => 'nullable|string|max:20',
-            'email'      => ['required', 'email', Rule::unique('users')->ignore($user->id)],
+            'first_name'        => 'required|string|max:255',
+            'last_name'         => 'required|string|max:255',
+            'Gender'            => 'required|string|max:50',
+            'dob'               => 'required|date',
+            'mobile'            => 'nullable|string|max:20',
+            'email'             => ['required', 'email', Rule::unique('users')->ignore($user->id)],
 
-            'Address'    => 'required|string|max:255',
-            'City'       => 'required|string|max:100',
-            'State'      => 'required|string|max:100',
-            'Landmark'   => 'nullable|string|max:255',
-            'PinCode'    => 'required|string|max:20',
-            'Country'    => 'required|string|max:100',
+            'Address'           => 'required|string|max:255',
+            'City'              => 'required|string|max:100',
+            'State'             => 'required|string|max:100',
+            'Landmark'          => 'nullable|string|max:255',
+            'PinCode'           => 'required|string|max:20',
+            'Country'           => 'required|string|max:100',
 
             'Shipping_Address'  => 'nullable|string|max:255',
             'Shipping_City'     => 'nullable|string|max:100',
@@ -65,7 +64,7 @@ class ProfileController extends Controller
         ]);
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $user) {
-            
+
             $user->update([
                 'first_name' => $validated['first_name'],
                 'last_name'  => $validated['last_name'],
@@ -90,7 +89,7 @@ class ProfileController extends Controller
                 ]
             );
 
-            if (!empty($validated['Shipping_Address'])) {
+            if (! empty($validated['Shipping_Address'])) {
                 $user->addresses()->updateOrCreate(
                     ['type' => 'shipping'],
                     [
@@ -109,12 +108,17 @@ class ProfileController extends Controller
         });
 
         $user->load(['company.wallet', 'wallet', 'addresses']);
-        if ($user->user_type === 'sub_admin') $user->load('managedVerticals');
-        if ($user->user_type === 'rewardee') $user->load('rewardeeProfile.vertical');
+        if ($user->user_type === 'sub_admin') {
+            $user->load('managedVerticals');
+        }
+
+        if ($user->user_type === 'rewardee') {
+            $user->load('rewardeeProfile.vertical');
+        }
 
         return response()->json([
             'message' => 'Profile updated successfully.',
-            'data' => new UserResource($user)
+            'data'    => new UserResource($user),
         ]);
     }
 
@@ -125,23 +129,23 @@ class ProfileController extends Controller
     {
         $validated = $request->validate([
             'current_password' => 'required|string',
-            'new_password'     => 'required|string|min:8|confirmed', 
+            'new_password'     => 'required|string|min:8|confirmed',
         ]);
 
         $user = $request->user();
 
-        if (!Hash::check($validated['current_password'], $user->password)) {
+        if (! Hash::check($validated['current_password'], $user->password)) {
             throw ValidationException::withMessages([
                 'current_password' => ['The provided password does not match our records.'],
             ]);
         }
 
         $user->update([
-            'password' => Hash::make($validated['new_password'])
+            'password' => Hash::make($validated['new_password']),
         ]);
 
         return response()->json([
-            'message' => 'Password changed successfully.'
+            'message' => 'Password changed successfully.',
         ]);
     }
 }

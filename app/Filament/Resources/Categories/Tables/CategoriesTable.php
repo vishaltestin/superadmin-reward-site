@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Filament\Resources\Categories\Tables;
 
 use Filament\Actions\BulkActionGroup;
@@ -15,7 +14,7 @@ use Filament\Tables\Table;
 
 class CategoriesTable
 {
-    public static function configure(Table $table) : Table
+    public static function configure(Table $table): Table
     {
         return $table->columns([
             ImageColumn::make('image')->circular(),
@@ -25,8 +24,7 @@ class CategoriesTable
                 ->sortable()
                 ->weight('bold')
                 ->description(
-                    fn ($record)
-                    => $record->parent ? 'Sub: ' . $record->parent->name : 'Top-Level',
+                    fn($record) => $record->parent ? 'Sub: ' . $record->parent->name : 'Top-Level',
                 ),
 
             TextColumn::make('sort_order')->numeric()->sortable(),

@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Filament\Resources\Categories;
 
 use App\Filament\Resources\Categories\Pages\CreateCategory;
@@ -27,40 +26,40 @@ class CategoryResource extends Resource
 
     protected static null|string|UnitEnum $navigationGroup = 'Platform Foundation';
 
-    public static function getEloquentQuery() : Builder
+    public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
             ->withoutGlobalScopes([SoftDeletingScope::class])
             ->with(['parent']);
     }
 
-    public static function form(Schema $schema) : Schema
+    public static function form(Schema $schema): Schema
     {
         return CategoryForm::configure($schema);
     }
 
-    public static function table(Table $table) : Table
+    public static function table(Table $table): Table
     {
         return CategoriesTable::configure($table);
     }
 
-    public static function getRelations() : array
+    public static function getRelations(): array
     {
         return [
             //
         ];
     }
 
-    public static function getPages() : array
+    public static function getPages(): array
     {
         return [
-            'index' => ListCategories::route('/'),
+            'index'  => ListCategories::route('/'),
             'create' => CreateCategory::route('/create'),
-            'edit' => EditCategory::route('/{record}/edit'),
+            'edit'   => EditCategory::route('/{record}/edit'),
         ];
     }
 
-    public static function getRecordRouteBindingEloquentQuery() : Builder
+    public static function getRecordRouteBindingEloquentQuery(): Builder
     {
         return parent::getRecordRouteBindingEloquentQuery()
             ->withoutGlobalScopes([SoftDeletingScope::class]);

@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
@@ -7,7 +6,6 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class SubAdminController extends Controller
@@ -28,11 +26,11 @@ class SubAdminController extends Controller
         $admin = $request->user();
 
         $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name'  => 'required|string|max:255',
-            'email'      => 'required|email|unique:users,email',
-            'mobile'     => 'nullable|string|max:20',
-            'managed_vertical_ids' => 'required|array|min:1',
+            'first_name'             => 'required|string|max:255',
+            'last_name'              => 'required|string|max:255',
+            'email'                  => 'required|email|unique:users,email',
+            'mobile'                 => 'nullable|string|max:20',
+            'managed_vertical_ids'   => 'required|array|min:1',
             'managed_vertical_ids.*' => 'exists:verticals,id',
         ]);
 
@@ -46,7 +44,7 @@ class SubAdminController extends Controller
                 'email'      => $validated['email'],
                 'mobile'     => $validated['mobile'],
                 // 'password'   => Hash::make(Str::random(12)), // TODO: Trigger Welcome Email
-                'password' => Hash::make('password123'),
+                'password'   => Hash::make('password123'),
                 'is_active'  => true,
             ]);
 
@@ -65,11 +63,11 @@ class SubAdminController extends Controller
             ->findOrFail($id);
 
         $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name'  => 'required|string|max:255',
-            'email'      => ['required', 'email', Rule::unique('users')->ignore($subAdmin->id)],
-            'mobile'     => 'nullable|string|max:20',
-            'managed_vertical_ids' => 'required|array|min:1',
+            'first_name'             => 'required|string|max:255',
+            'last_name'              => 'required|string|max:255',
+            'email'                  => ['required', 'email', Rule::unique('users')->ignore($subAdmin->id)],
+            'mobile'                 => 'nullable|string|max:20',
+            'managed_vertical_ids'   => 'required|array|min:1',
             'managed_vertical_ids.*' => 'exists:verticals,id',
         ]);
 

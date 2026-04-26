@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
@@ -14,11 +13,11 @@ class AdminAuthController extends Controller
     public function login(Request $request)
     {
         $credentials = $request->validate([
-            'email' => 'required|email',
+            'email'    => 'required|email',
             'password' => 'required',
         ]);
 
-        $throttleKey = Str::transliterate(Str::lower($request->email).'|'.$request->ip());
+        $throttleKey = Str::transliterate(Str::lower($request->email) . '|' . $request->ip());
         if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
             $seconds = RateLimiter::availableIn($throttleKey);
             return response()->json(['message' => "Too many attempts. Try again in {$seconds}s."], 429);
@@ -34,13 +33,13 @@ class AdminAuthController extends Controller
                 $user->load('managedVerticals');
             }
 
-            if (!in_array($user->user_type, ['business_head', 'sub_admin'])) {
+            if (! in_array($user->user_type, ['business_head', 'sub_admin'])) {
                 Auth::guard('web')->logout();
                 $request->session()->invalidate();
                 return response()->json(['message' => 'Access Denied: This portal is for Company Administrators only.'], 403);
             }
 
-            if (!$user->is_active || ($user->company_id && !$user->company->is_active)) {
+            if (! $user->is_active || ($user->company_id && ! $user->company->is_active)) {
                 Auth::guard('web')->logout();
                 $request->session()->invalidate();
                 return response()->json(['message' => 'Account Suspended.'], 403);
@@ -48,7 +47,7 @@ class AdminAuthController extends Controller
 
             return response()->json([
                 'message' => 'Admin Login successful',
-                'user' => new UserResource($user), 
+                'user'    => new UserResource($user),
             ]);
         }
 
