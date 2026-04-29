@@ -9,12 +9,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use App\Traits\HasWallet;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 
 use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable(['name', 'email', 'password', 'company_id', 'user_type', 'first_name', 'last_name', 'mobile','gender', 'dob', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
    use HasApiTokens, HasFactory, Notifiable, HasWallet;
@@ -27,6 +29,12 @@ class User extends Authenticatable
             'is_active' => 'boolean',
         ];
     }
+
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return $this->user_type === 'super_admin';
+    }
+
     protected static function booted()
     {
         // Auto-create a wallet when a new user is created
