@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Storefront\StorefrontAuthController;
 use App\Http\Controllers\Api\Website\DemoRequestController;
 use App\Http\Controllers\Api\Website\LeadController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\Admin\PaymentController;
 
 Route::prefix('admin')->group(function () {
     Route::post('/auth/login', [AdminAuthController::class, 'login']);
@@ -84,6 +85,12 @@ Route::prefix('admin')->group(function () {
                 Route::get('/catalog-config', [CompanyController::class, 'getCatalogConfig']);
                 Route::put('/catalog-visibility', [CompanyController::class, 'updateCatalogVisibility']);
             });
+
+            Route::prefix('payment')->group(function () {
+    Route::get('/balance', [PaymentController::class, 'balance']);
+    Route::get('/transactions', [PaymentController::class, 'transactions']);
+    Route::post('/top-up/mock', [PaymentController::class, 'mockTopUp']);
+});
         });
     });
 });
