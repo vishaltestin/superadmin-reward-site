@@ -13,6 +13,10 @@ use App\Http\Controllers\Api\Website\DemoRequestController;
 use App\Http\Controllers\Api\Website\LeadController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Admin\PaymentController;
+use App\Http\Controllers\Api\Admin\CampaignController;
+use App\Http\Controllers\Api\Storefront\ClaimController;
+use App\Http\Controllers\Api\Admin\EventController;
+
 
 Route::prefix('admin')->group(function () {
     Route::post('/auth/login', [AdminAuthController::class, 'login']);
@@ -24,6 +28,22 @@ Route::prefix('admin')->group(function () {
             Route::put('/update', [ProfileController::class, 'update']);
             Route::post('/change-password', [ProfileController::class, 'changePassword']);
         });
+
+        Route::get('/events', [EventController::class, 'index']);
+        
+
+            Route::prefix('campaigns')->group(function () {
+        Route::get('/', [CampaignController::class, 'index']);
+        
+        Route::get('/{id}', [CampaignController::class, 'show']);
+        
+        Route::post('/', [CampaignController::class, 'store']);
+        
+        Route::post('/{id}/cancel', [CampaignController::class, 'cancel']);
+        
+        Route::get('/{id}/export', [CampaignController::class, 'exportReport']);
+    });
+
 
         Route::get('/verticals', function (Illuminate\Http\Request $request) {
             $user = $request->user();
@@ -103,6 +123,19 @@ Route::prefix('website')->group(function () {
 Route::prefix('storefront')->group(function () {
     Route::post('/auth/login', [StorefrontAuthController::class, 'login']);
     Route::get('/promotions', [PromotionController::class, 'index']);
+
+    Route::prefix('claim')->group(function () {
+        
+        // 1. Validate the Token & Fetch Page Data
+        // URL Example: GET /api/storefront/claim/validate?token=64CHAR_CRYPTO_STRING
+        // Returns the reward value, the allowed catalog items, and the Landing Page JSON.
+        Route::get('/validate', [ClaimController::class, 'validateToken']);
+        
+        // 2. Execute the Claim (The Single Page Checkout Submit)
+        // Passes the token, selected product ID, shipping address, and fiat payment (if they upsold themselves)
+        Route::post('/execute', [ClaimController::class, 'executeClaim'])->middleware('auth:sanctum');
+        
+    });
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/auth/logout', [StorefrontAuthController::class, 'logout']);

@@ -82,6 +82,7 @@ class EmployeeController extends Controller
             $newUser->fill([
                 'company_id' => $admin->company_id,
                 'user_type'  => 'rewardee',
+                'name' => trim($validated['first_name'] . ' ' . $validated['last_name']),
                 'first_name' => $validated['first_name'],
                 'last_name'  => $validated['last_name'],
                 'email'      => $validated['email'],
@@ -207,6 +208,7 @@ class EmployeeController extends Controller
                     'company_id' => $admin->company_id,
                     'user_type'  => 'rewardee',
                     'first_name' => $rowData['first_name'],
+                    'name'       => trim($rowData['first_name'] . ' ' . $rowData['last_name']),
                     'last_name'  => $rowData['last_name'],
                     'email'      => $rowData['email'],
                     'mobile'     => $rowData['mobile'] ?? null,

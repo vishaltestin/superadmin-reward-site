@@ -72,7 +72,7 @@ class Product extends Model
     {
         return $this->belongsTo(Category::class, 'category_id');
     }
-
+    
     // 2. The Tagged/Bonus Categories
     public function secondaryCategories(): BelongsToMany
     {
