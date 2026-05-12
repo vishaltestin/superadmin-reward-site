@@ -251,4 +251,33 @@ class EmployeeController extends Controller
             return response()->json(['message' => 'A server error occurred during import.'], 500);
         }
     }
+
+
+
+    public function promoteToAdmin(Request $request, $id)
+{
+    $admin = $request->user();
+
+    $validated = $request->validate([
+        'managed_vertical_ids'   => 'required|array|min:1',
+        'managed_vertical_ids.*' => 'exists:verticals,id',
+    ]);
+
+    $employee = User::where('company_id', $admin->company_id)
+        ->where('user_type', 'rewardee')
+        ->findOrFail($id);
+
+    DB::transaction(function () use ($employee, $validated) {
+        // 1. Upgrade the user type
+        $employee->update(['user_type' => 'sub_admin']);
+
+        // 2. Assign vertical access
+        $employee->managedVerticals()->sync($validated['managed_vertical_ids']);
+
+        // 3. (Optional) Remove their rewardee profile if they shouldn't receive rewards anymore
+        // $employee->rewardeeProfile()->delete(); 
+    });
+
+    return response()->json(['message' => 'Employee successfully promoted to Sub-Admin.']);
+}
 }

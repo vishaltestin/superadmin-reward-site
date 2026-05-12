@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Admin\PaymentController;
 use App\Http\Controllers\Api\Admin\CampaignController;
 use App\Http\Controllers\Api\Storefront\ClaimController;
 use App\Http\Controllers\Api\Admin\EventController;
+use App\Http\Controllers\Api\Admin\DashboardController;
 
 
 Route::prefix('admin')->group(function () {
@@ -67,7 +68,14 @@ Route::prefix('admin')->group(function () {
             Route::post('/', [EmployeeController::class, 'store']);
             Route::put('/{id}', [EmployeeController::class, 'update']);
             Route::post('/bulk-upload', [EmployeeController::class, 'bulkUpload']);
+            Route::post('/{id}/promote', [EmployeeController::class, 'promoteToAdmin']);
         });
+
+
+        Route::prefix('dashboard')->group(function () {
+    Route::get('/calendar-events', [DashboardController::class, 'getCalendarEvents']);
+});
+
         Route::prefix('email-templates')->group(function () {
             Route::get('/sidebar-events', [EmailTemplateController::class, 'getSidebarEvents']);
 

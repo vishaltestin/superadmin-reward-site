@@ -84,4 +84,17 @@ class SubAdminController extends Controller
 
         return response()->json(['message' => 'Sub-Admin updated successfully.']);
     }
+
+    public function destroy(Request $request, $id)
+{
+    $admin = $request->user();
+
+    $subAdmin = User::where('company_id', $admin->company_id)
+        ->where('user_type', 'sub_admin')
+        ->findOrFail($id);
+
+    $subAdmin->delete();
+
+    return response()->json(['message' => 'Sub-Admin deleted successfully.']);
+}
 }
