@@ -23,7 +23,6 @@ return new class extends Migration
             $table->string('logo')->nullable();
             $table->string('points_name')->default('Points');
             
-            $table->decimal('available_funds', 15, 2)->default(0.00);
             $table->boolean('is_active')->default(true);
             $table->boolean('is_approved')->default(false); 
             

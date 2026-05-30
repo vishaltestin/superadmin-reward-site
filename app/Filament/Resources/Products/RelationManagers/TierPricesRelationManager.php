@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Products\RelationManagers;
 
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -13,21 +14,28 @@ use Filament\Actions;
 class TierPricesRelationManager extends RelationManager
 {
     protected static string $relationship = 'tierPrices';
-
     protected static ?string $recordTitleAttribute = 'min_quantity';
-    
     protected static ?string $title = 'Bulk Tier Pricing';
 
     public function form(Schema $schema): Schema
     {
         return $schema
             ->schema([
+                Select::make('product_variant_id')
+                    ->label('Applies To')
+                    ->options(function ($livewire) {
+                        return $livewire->ownerRecord->variants->pluck('name', 'id');
+                    })
+                    ->placeholder('All Variants (Global Discount)')
+                    ->columnSpanFull()
+                    ->searchable()
+                    ->preload(),
+
                 TextInput::make('min_quantity')
                     ->label('Minimum Quantity Required')
                     ->numeric()
                     ->required()
-                    ->minValue(2)
-                    ->helperText('The lowest number of items a user must buy to get this price.'),
+                    ->minValue(2),
 
                 TextInput::make('selling_price')
                     ->label('Discounted Price (Per Unit)')
@@ -41,6 +49,12 @@ class TierPricesRelationManager extends RelationManager
     {
         return $table
             ->columns([
+                TextColumn::make('variant.name')
+                    ->label('Applies To')
+                    ->default('All Variants')
+                    ->badge()
+                    ->color(fn ($state) => $state === 'All Variants' ? 'success' : 'gray'),
+
                 TextColumn::make('min_quantity')
                     ->label('Buy At Least')
                     ->sortable()
@@ -50,22 +64,13 @@ class TierPricesRelationManager extends RelationManager
                     ->label('Price Per Unit')
                     ->money('INR')
                     ->sortable()
-                    ->weight('bold')
-                    ->color('success'),
+                    ->weight('bold'),
             ])
             ->defaultSort('min_quantity', 'asc')
-            ->filters([])
-            ->headerActions([
-                Actions\CreateAction::make(),
-            ])
+            ->headerActions([Actions\CreateAction::make()])
             ->actions([
                 Actions\EditAction::make(),
                 Actions\DeleteAction::make(),
-            ])
-            ->bulkActions([
-                Actions\BulkActionGroup::make([
-                    Actions\DeleteBulkAction::make(),
-                ]),
             ]);
     }
 }

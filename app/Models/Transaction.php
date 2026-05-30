@@ -25,7 +25,7 @@ class Transaction extends Model
         return [
             'expires_at' => 'datetime',
             'amount' => 'decimal:2',
-            'fiat_paid' => 'decimal:2', // <-- Added here
+            'fiat_paid' => 'decimal:2', 
             'remaining_amount' => 'decimal:2',
         ];
     }

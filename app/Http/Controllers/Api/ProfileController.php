@@ -10,9 +10,6 @@ use Illuminate\Validation\ValidationException;
 
 class ProfileController extends Controller
 {
-    /**
-     * Get the authenticated user's profile with all necessary relations.
-     */
     public function me(Request $request)
     {
         $user = $request->user();
@@ -33,9 +30,6 @@ class ProfileController extends Controller
         ]);
     }
 
-    /**
-     * Update basic profile details.
-     */
     public function update(Request $request)
     {
         $user = $request->user();
@@ -122,9 +116,6 @@ class ProfileController extends Controller
         ]);
     }
 
-    /**
-     * Securely change the user's password.
-     */
     public function changePassword(Request $request)
     {
         $validated = $request->validate([

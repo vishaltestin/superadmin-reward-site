@@ -1,11 +1,10 @@
 <?php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Order extends Model
 {
@@ -18,29 +17,32 @@ class Order extends Model
         'total_amount',
         'gst_total',
         'points_used',
+        'coupon_code',
+        'discount_amount',
         'fiat_paid',
         'payment_gateway_reference',
         'status',
 
-        'shipping_name', 
-        'shipping_mobile', 
-        'shipping_address_line_1', 
-        'shipping_address_line_2', 
-        'shipping_city', 
-        'shipping_state', 
+        'shipping_name',
+        'shipping_mobile',
+        'shipping_address_line_1',
+        'shipping_address_line_2',
+        'shipping_city',
+        'shipping_state',
         'shipping_pincode',
         'billing_address_snapshot',
-        'logistics_provider', 
-        'tracking_number'
+        'logistics_provider',
+        'tracking_number',
     ];
 
     protected function casts(): array
     {
         return [
-            'total_amount' => 'decimal:2',
-            'gst_total' => 'decimal:2',
-            'fiat_paid' => 'decimal:2',
-            'points_used' => 'integer',
+            'total_amount'             => 'decimal:2',
+            'gst_total'                => 'decimal:2',
+            'fiat_paid'                => 'decimal:2',
+            'discount_amount'          => 'decimal:2',
+            'points_used'              => 'integer',
             'billing_address_snapshot' => 'array',
         ];
     }

@@ -15,9 +15,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(prepend: [
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
         ]);
+        $middleware->validateCsrfTokens(except: [
+        'api/storefront/*', 
+    ]);
         $middleware->alias([
             'is.admin' => \App\Http\Middleware\IsCompanyAdmin::class, 
             'role' => \App\Http\Middleware\CheckUserRole::class,
+            'storefront.tenant' => \App\Http\Middleware\VerifyStorefrontTenant::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

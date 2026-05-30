@@ -1,10 +1,9 @@
 <?php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ProductVariant extends Model
 {
@@ -25,17 +24,22 @@ class ProductVariant extends Model
     protected function casts(): array
     {
         return [
-            'mrp' => 'decimal:2',
-            'selling_price' => 'decimal:2',
-            'attributes' => 'array', // Auto-cast JSON to PHP array
-            'is_active' => 'boolean',
+            'mrp'            => 'decimal:2',
+            'selling_price'  => 'decimal:2',
+            'attributes'     => 'array', 
+            'is_active'      => 'boolean',
             'stock_quantity' => 'integer',
         ];
     }
 
-    // A variant belongs to one parent product
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+    public function companyOverrides(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Company::class, 'company_product_variant')
+            ->withPivot(['override_image', 'override_mrp', 'override_selling_price'])
+            ->withTimestamps();
     }
 }

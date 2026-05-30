@@ -1,10 +1,9 @@
 <?php
-
 namespace App\Models;
 
+use App\Traits\HasWallet;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Traits\HasWallet; 
 
 class Company extends Model
 {
@@ -33,12 +32,12 @@ class Company extends Model
     protected function casts(): array
     {
         return [
-            'is_active' => 'boolean',
-            'is_approved' => 'boolean',
-            'point_multiplier' => 'float',
-            'social_links' => 'array',
-        'hidden_category_ids' => 'array',
-        'hidden_product_ids' => 'array',
+            'is_active'           => 'boolean',
+            'is_approved'         => 'boolean',
+            'point_multiplier'    => 'float',
+            'social_links'        => 'array',
+            'hidden_category_ids' => 'array',
+            'hidden_product_ids'  => 'array',
         ];
     }
     protected static function booted()
@@ -52,7 +51,7 @@ class Company extends Model
             }
         });
     }
-    
+
     public function categories()
     {
         return $this->belongsToMany(Category::class);
@@ -67,15 +66,14 @@ class Company extends Model
     {
         return $this->belongsToMany(Product::class)
             ->withPivot([
-                'is_excluded', 
-                'override_name', 
-                'override_image', 
-                'override_mrp', 
-                'override_selling_price'
+                'is_excluded',
+                'override_name',
+                'override_image',
+                'override_mrp',
+                'override_selling_price',
             ])
             ->withTimestamps();
     }
-
 
     /**
      * Get all orders placed by employees of this company.
@@ -83,5 +81,11 @@ class Company extends Model
     public function orders(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(Order::class);
+    }
+    public function variantOverrides(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(ProductVariant::class, 'company_product_variant')
+            ->withPivot(['override_image', 'override_mrp', 'override_selling_price'])
+            ->withTimestamps();
     }
 }
