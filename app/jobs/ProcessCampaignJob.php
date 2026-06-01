@@ -99,9 +99,8 @@ class ProcessCampaignJob implements ShouldQueue
 
         $campaign->update(['status' => $newStatus]);
 
-        // If it's active right now, kick off the communications or points deposit job
         if ($newStatus === 'active') {
-            // DispatchCampaignCommsJob::dispatch($campaign->id);
+            DispatchCampaignCommsJob::dispatch($campaign->id);
         }
     }
 }

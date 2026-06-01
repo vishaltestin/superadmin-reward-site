@@ -68,6 +68,7 @@ Route::prefix('admin')->group(function () {
             Route::get('/', [EmployeeController::class, 'index']);
             Route::post('/', [EmployeeController::class, 'store']);
             Route::put('/{id}', [EmployeeController::class, 'update']);
+            Route::delete('/{id}', [EmployeeController::class, 'destroy']);
             Route::post('/bulk-upload', [EmployeeController::class, 'bulkUpload']);
             Route::post('/{id}/promote', [EmployeeController::class, 'promoteToAdmin']);
         });
@@ -105,6 +106,7 @@ Route::prefix('admin')->group(function () {
                 Route::get('/', [SubAdminController::class, 'index']);
                 Route::post('/', [SubAdminController::class, 'store']);
                 Route::put('/{id}', [SubAdminController::class, 'update']);
+                Route::delete('/{id}', [SubAdminController::class, 'destroy']);
             });
 
             Route::prefix('company')->group(function () {

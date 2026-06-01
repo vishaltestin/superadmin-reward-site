@@ -1,9 +1,9 @@
 <?php
-
 namespace App\Jobs;
 
 use App\Models\Campaign;
 use App\Models\EmailTemplate;
+use App\Services\EmailParserService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -24,41 +24,51 @@ class DispatchCampaignCommsJob implements ShouldQueue
 
     public function handle(): void
     {
-        $campaign = Campaign::with('entitlements.user')->findOrFail($this->campaignId);
-        
-        // Fetch the selected email template from config_json
-        $config = $campaign->config_json;
+        $campaign = Campaign::with('entitlements.user.company')->findOrFail($this->campaignId);
+
+        $config     = $campaign->config_json;
         $templateId = $config['email_template_id'] ?? null;
 
-        if (!$templateId) return;
+        if (! $templateId) {
+            return;
+        }
 
         $template = EmailTemplate::find($templateId);
-        if (!$template) return;
+        if (! $template || ! $template->html_body) {
+            return;
+        }
 
         $entitlements = $campaign->entitlements()->where('is_claimed', false)->get();
 
         foreach ($entitlements as $entitlement) {
             $user = $entitlement->user;
-            if (!$user || !$user->email) continue;
-
-            // Generate the dynamic link or code
-            $claimUrl = null;
-            if ($campaign->reward_type === 'link') {
-                $claimUrl = config('app.frontend_url') . '/claim?token=' . $entitlement->claim_token;
+            if (! $user || ! $user->email) {
+                continue;
             }
 
-            // Replace dynamic variables in the HTML body
-            $htmlBody = $template->html_body;
-            $htmlBody = str_replace('{{ first_name }}', $user->first_name, $htmlBody);
-            $htmlBody = str_replace('{{ reward_value }}', $entitlement->reward_value, $htmlBody);
-            $htmlBody = str_replace('{{ claim_link }}', $claimUrl ?? '#', $htmlBody);
-            $htmlBody = str_replace('{{ claim_code }}', $entitlement->claim_code ?? 'N/A', $htmlBody);
+            $claimUrl = null;
+            if ($campaign->reward_type === 'link') {
+                $claimUrl = rtrim(env('STOREFRONT_URL'), '/') . '/claim?token=' . $entitlement->claim_token;
+            }
 
-            // Send via your mail provider (SES/SMTP)
-            // Mail::html($htmlBody, function ($message) use ($user, $template) {
-            //     $message->to($user->email)
-            //             ->subject($template->subject);
-            // });
+            $payload = [
+                'first_name'    => $user->first_name,
+                'last_name'     => $user->last_name,
+                'company_name'  => $user->company->name ?? 'Our Company',
+                'current_date'  => now()->format('F j, Y'),
+                'campaign_name' => $campaign->name,
+                'reward_value'  => $entitlement->reward_value,
+                'claim_link'    => $claimUrl ?? '#',
+                'claim_code'    => $entitlement->claim_code ?? '',
+            ];
+
+            $htmlBody     = EmailParserService::parse($template->html_body, $payload);
+            $finalSubject = EmailParserService::parse($template->subject, $payload);
+
+            Mail::html($htmlBody, function ($message) use ($user, $finalSubject) {
+                $message->to($user->email)
+                    ->subject($finalSubject);
+            });
         }
     }
 }

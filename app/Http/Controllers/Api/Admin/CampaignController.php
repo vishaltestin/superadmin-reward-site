@@ -101,6 +101,7 @@ class CampaignController extends Controller
                 'distribution_type'  => $validated['distribution_type'],
                 'reward_type'        => $validated['reward_type'] ?? null,
                 'budget_locked'      => $totalCost,
+                'total_budget'       => $totalCost,
                 'total_recipients'   => $totalRecipients,
                 'config_json'        => array_merge($validated['config_json'] ?? [], [
                     'event_address' => $validated['event_address'] ?? null,

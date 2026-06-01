@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -10,6 +9,7 @@ class LandingPageTemplate extends Model
     protected $fillable = [
         'event_id',
         'company_id',
+        'reward_type',
         'name',
         'title',
         'status',
@@ -26,10 +26,10 @@ class LandingPageTemplate extends Model
     protected function casts(): array
     {
         return [
-            'is_active' => 'boolean',
+            'is_active'           => 'boolean',
             'global_theme_tokens' => 'array',
-            'seo_meta' => 'array',
-            'page_schema' => 'array',
+            'seo_meta'            => 'array',
+            'page_schema'         => 'array',
         ];
     }
 

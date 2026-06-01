@@ -1,16 +1,15 @@
 <?php
-
 namespace App\Filament\Resources\LandingPageTemplates\Schemas;
 
-use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Grid;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\Toggle;
-use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\KeyValue;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 
 class LandingPageTemplateForm
 {
@@ -19,15 +18,23 @@ class LandingPageTemplateForm
         return $schema
             ->columns(1)
             ->components([
-
-                // --- CORE SETTINGS ---
                 Section::make('Page Settings')->schema([
-                    Grid::make(3)->schema([
+                    Grid::make(2)->schema([
                         Select::make('event_id')
                             ->relationship('event', 'title')
                             ->searchable()
                             ->preload()
                             ->required(),
+
+                            Select::make('reward_type')
+                            ->label('Template Layout Type (Reward)')
+                            ->options([
+                                'points' => 'Points Reward',
+                                'code'   => 'Promo Code',
+                                'link'   => 'Magic Link',
+                            ])
+                            ->placeholder('General / Master Template')
+                            ->helperText('Leave blank for general pages, or select a specific type to restrict where this can be used.'),
 
                         Select::make('company_id')
                             ->relationship('company', 'name')
@@ -36,9 +43,9 @@ class LandingPageTemplateForm
 
                         Select::make('status')
                             ->options([
-                                'draft' => 'Draft',
+                                'draft'     => 'Draft',
                                 'published' => 'Published',
-                                'archived' => 'Archived',
+                                'archived'  => 'Archived',
                             ])
                             ->default('draft')
                             ->required(),
@@ -56,11 +63,10 @@ class LandingPageTemplateForm
                     KeyValue::make('global_theme_tokens')
                         ->default([
                             'primaryColor' => '#4f46e5',
-                            'fontFamily' => 'Inter, sans-serif',
+                            'fontFamily'   => 'Inter, sans-serif',
                         ]),
                 ]),
 
-                // --- SEO ---
                 Section::make('SEO')->schema([
                     TextInput::make('seo_meta.title'),
                     Textarea::make('seo_meta.description'),
@@ -70,7 +76,6 @@ class LandingPageTemplateForm
                         ->directory('seo'),
                 ]),
 
-                // --- RAW JSON EDITOR ---
                 Section::make('Page Schema (JSON)')
                     ->description('Paste or edit your full React schema here.')
                     ->schema([
@@ -78,7 +83,7 @@ class LandingPageTemplateForm
                         Textarea::make('page_schema')
                             ->rows(30)
                             ->required()
-                            ->formatStateUsing(fn ($state) =>
+                            ->formatStateUsing(fn($state) =>
                                 json_encode($state ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
                             )
                             ->dehydrateStateUsing(function ($state) {

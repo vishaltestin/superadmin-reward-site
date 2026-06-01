@@ -101,7 +101,10 @@ class ClaimController extends Controller
             return response()->json(['message' => 'Invalid or malformed reward link.'], 404);
         }
         if ($entitlement->issued_to_user_id !== $user->id) {
-            return response()->json(['message' => 'Unauthorized. This reward belongs to another employee.'], 403);
+            return response()->json([
+                'message'    => 'This reward belongs to another employee.',
+                'error_code' => 'reward_owner_mismatch',
+            ], 422);
         }
 
         if ($entitlement->is_claimed) {
@@ -243,7 +246,6 @@ class ClaimController extends Controller
         }
     }
 
-
     /**
      * 3. Fetch the restricted catalog for the Landing Page
      * GET /api/storefront/{slug}/claim/catalog
@@ -265,21 +267,21 @@ class ClaimController extends Controller
             ->whereNotIn('category_id', $hiddenCategoryIds)
             ->whereNotIn('id', $hiddenProductIds);
 
-        if (!empty($allowedIds) && is_array($allowedIds)) {
+        if (! empty($allowedIds) && is_array($allowedIds)) {
             $query->whereIn('id', $allowedIds);
         }
 
         $query->whereDoesntHave('customCompanies', function ($q) use ($company) {
             $q->where('company_id', $company->id)->where('is_excluded', true);
         })
-        ->with(['variants' => function ($q) use ($company) {
-            $q->where('is_active', true)
-              ->with(['companyOverrides' => function ($subQ) use ($company) {
-                  $subQ->where('company_id', $company->id);
-              }]);
-        }, 'customCompanies' => function ($q) use ($company) {
-            $q->where('company_id', $company->id);
-        }]);
+            ->with(['variants' => function ($q) use ($company) {
+                $q->where('is_active', true)
+                    ->with(['companyOverrides' => function ($subQ) use ($company) {
+                        $subQ->where('company_id', $company->id);
+                    }]);
+            }, 'customCompanies' => function ($q) use ($company) {
+                $q->where('company_id', $company->id);
+            }]);
 
         $products = $query->get();
 
@@ -299,10 +301,10 @@ class ClaimController extends Controller
                 'mrp'            => (float) $fiatMrp,
                 'selling_price'  => (float) $fiatSellingPrice,
                 'has_variants'   => $product->variants->count() > 0,
-                
+
                 'variants'       => $product->variants->map(function ($v) use ($productPivot, $product) {
                     $variantPivot = $v->companyOverrides->first()?->pivot;
-                    
+
                     $vPrice = $variantPivot?->override_selling_price ?? $v->selling_price ?? $productPivot?->override_selling_price ?? $product->selling_price;
                     $vMrp   = $variantPivot?->override_mrp ?? $v->mrp ?? $productPivot?->override_mrp ?? $product->mrp;
                     $vImage = $variantPivot?->override_image ?? $v->image ?? $productPivot?->override_image ?? $product->main_image;

@@ -2,10 +2,12 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\EventVariable;
 use App\Models\LandingPageTemplate;
 use App\Models\Vertical;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class LandingPageController extends Controller
 {
@@ -157,8 +159,8 @@ class LandingPageController extends Controller
             'title' => 'nullable|string|max:255',
         ]);
 
-        $newName = !empty($validated['name']) ? $validated['name'] : 'Copy of ' . $masterTemplate->name;
-        $newTitle = !empty($validated['title']) ? $validated['title'] : $masterTemplate->title;
+        $newName  = ! empty($validated['name']) ? $validated['name'] : 'Copy of ' . $masterTemplate->name;
+        $newTitle = ! empty($validated['title']) ? $validated['title'] : $masterTemplate->title;
 
         $variation = DB::transaction(function () use ($masterTemplate, $user, $newName, $newTitle) {
             return LandingPageTemplate::create([
@@ -180,6 +182,29 @@ class LandingPageController extends Controller
         ], 201);
     }
 
+    // public function update(Request $request, $id)
+    // {
+    //     $user     = $request->user();
+    //     $template = LandingPageTemplate::where('company_id', $user->company_id)->findOrFail($id);
+
+    //     $validated = $request->validate([
+    //         'name'                => 'sometimes|string|max:255',
+    //         'title'               => 'sometimes|string|max:255',
+    //         'status'              => 'sometimes|in:draft,published,archived',
+    //         'global_theme_tokens' => 'sometimes|array',
+    //         'seo_meta'            => 'sometimes|array',
+    //         'page_schema'         => 'sometimes|array',
+    //         'is_active'           => 'sometimes|boolean',
+    //     ]);
+
+    //     $template->update($validated);
+
+    //     return response()->json([
+    //         'message' => 'Landing page saved successfully.',
+    //         'data'    => $template,
+    //     ]);
+    // }
+
     public function update(Request $request, $id)
     {
         $user     = $request->user();
@@ -194,6 +219,43 @@ class LandingPageController extends Controller
             'page_schema'         => 'sometimes|array',
             'is_active'           => 'sometimes|boolean',
         ]);
+
+        // --- STRICT VARIABLE VALIDATION GATEKEEPER ---
+        // Convert the JSON arrays to strings so we can scan the entire schema for tags
+        $contentParts = [
+            $validated['title'] ?? '',
+            isset($validated['seo_meta']) ? json_encode($validated['seo_meta']) : '',
+            isset($validated['page_schema']) ? json_encode($validated['page_schema']) : '',
+        ];
+
+        $contentToValidate = implode(' ', $contentParts);
+
+        if (! empty(trim($contentToValidate))) {
+            preg_match_all('/{{\s*(.*?)\s*}}/', $contentToValidate, $matches);
+            $usedTags = array_unique($matches[1]);
+
+            if (count($usedTags) > 0) {
+                $allowedTags = EventVariable::where('is_active', true)
+                    ->where(function ($query) use ($template) {
+                        $query->whereNull('event_id')
+                            ->orWhere('event_id', $template->event_id);
+                    })
+                    ->pluck('value')
+                    ->map(function ($val) {
+                        return trim(str_replace(['{{', '}}'], '', $val));
+                    })
+                    ->toArray();
+
+                $invalidTags = array_diff($usedTags, $allowedTags);
+
+                if (count($invalidTags) > 0) {
+                    throw ValidationException::withMessages([
+                        'page_schema' => 'You used invalid dynamic variables: ' . implode(', ', $invalidTags),
+                    ]);
+                }
+            }
+        }
+        // --- END STRICT VALIDATION ---
 
         $template->update($validated);
 
@@ -213,19 +275,19 @@ class LandingPageController extends Controller
     }
 
     public function uploadImage(Request $request)
-{
-    $request->validate([
-        'files' => 'required|array',
-        'files.*' => 'image|mimes:jpeg,png,jpg,gif,svg,webp|max:4096'
-    ]);
+    {
+        $request->validate([
+            'files'   => 'required|array',
+            'files.*' => 'image|mimes:jpeg,png,jpg,gif,svg,webp|max:4096',
+        ]);
 
-    $urls = [];
+        $urls = [];
 
-    foreach ($request->file('files') as $file) {
-        $path = $file->store('landing-page-assets', 'public');
-        $urls[] = asset('storage/' . $path);
+        foreach ($request->file('files') as $file) {
+            $path   = $file->store('landing-page-assets', 'public');
+            $urls[] = asset('storage/' . $path);
+        }
+
+        return response()->json(['data' => $urls]);
     }
-
-    return response()->json(['data' => $urls]);
-}
 }

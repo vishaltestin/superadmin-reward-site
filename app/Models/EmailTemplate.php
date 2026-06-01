@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -10,18 +9,19 @@ class EmailTemplate extends Model
     protected $fillable = [
         'event_id',
         'company_id',
+        'reward_type',
         'name',
         'subject',
         'html_body',
-        'design_json',      
-        'thumbnail_path',   
+        'design_json',
+        'thumbnail_path',
         'is_active',
     ];
 
     protected function casts(): array
     {
         return [
-            'is_active' => 'boolean',
+            'is_active'   => 'boolean',
             'design_json' => 'array',
         ];
     }

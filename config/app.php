@@ -27,6 +27,8 @@ return [
     */
 
     'env' => env('APP_ENV', 'production'),
+    'storefront_url' => env('STOREFRONT_URL'),
+    'admin_url' => env('ADMIN_URL'),
 
     /*
     |--------------------------------------------------------------------------
