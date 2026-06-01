@@ -11,9 +11,7 @@ use Illuminate\Validation\ValidationException;
 
 class LandingPageController extends Controller
 {
-    /**
-     * Helper: Centralize the logic to figure out which verticals this user is allowed to see.
-     */
+
     private function getAccessibleVerticalIds($user): array
     {
         if ($user->user_type === 'sub_admin') {
@@ -22,17 +20,12 @@ class LandingPageController extends Controller
         return $user->company->verticals()->pluck('verticals.id')->toArray();
     }
 
-    /**
-     * Generate the highly nested JSON for the React Sidebar.
-     * (Reused from Email logic but counts LandingPageTemplates instead)
-     */
     public function getSidebarEvents(Request $request)
     {
         $user        = $request->user();
         $companyId   = $user->company_id;
         $verticalIds = $this->getAccessibleVerticalIds($user);
 
-        // Count Landing Page variations for this company
         $variationCounts = LandingPageTemplate::where('company_id', $companyId)
             ->selectRaw('event_id, count(*) as count')
             ->groupBy('event_id')
@@ -83,9 +76,6 @@ class LandingPageController extends Controller
         return response()->json(['data' => $sidebarData]);
     }
 
-    /**
-     * List all templates (Global Masters or Company Variations) for the Grid
-     */
     public function index(Request $request)
     {
         $user = $request->user();
@@ -115,9 +105,6 @@ class LandingPageController extends Controller
         return response()->json(['data' => $templates]);
     }
 
-    /**
-     * Fetch a specific template AND its full JSON schema AND Dynamic Variables
-     */
     public function show(Request $request, $id)
     {
         $user     = $request->user();
@@ -153,7 +140,6 @@ class LandingPageController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
-        // Validate incoming name and title
         $validated = $request->validate([
             'name'  => 'nullable|string|max:255',
             'title' => 'nullable|string|max:255',
@@ -220,8 +206,6 @@ class LandingPageController extends Controller
             'is_active'           => 'sometimes|boolean',
         ]);
 
-        // --- STRICT VARIABLE VALIDATION GATEKEEPER ---
-        // Convert the JSON arrays to strings so we can scan the entire schema for tags
         $contentParts = [
             $validated['title'] ?? '',
             isset($validated['seo_meta']) ? json_encode($validated['seo_meta']) : '',
@@ -255,7 +239,6 @@ class LandingPageController extends Controller
                 }
             }
         }
-        // --- END STRICT VALIDATION ---
 
         $template->update($validated);
 

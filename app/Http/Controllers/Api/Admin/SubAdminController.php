@@ -37,7 +37,7 @@ class SubAdminController extends Controller
             'managed_vertical_ids.*' => 'exists:verticals,id',
         ]);
 
-        $rawPassword = Str::random(10); 
+        $rawPassword = Str::random(10);
 
         $subAdmin = DB::transaction(function () use ($validated, $admin, $rawPassword) {
             $newAdmin = User::create([

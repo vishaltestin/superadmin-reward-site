@@ -42,7 +42,6 @@ class CampaignController extends Controller
             'custom_event_name'         => 'nullable|required_without:event_id|string|max:255',
             'distribution_type'         => 'required|in:online,bulk',
 
-            // Flow A: Online
             'reward_type'               => 'required_if:distribution_type,online|in:points,code,link',
             'recipient_ids'             => 'required_if:distribution_type,online|array',
             'recipient_ids.*'           => 'exists:users,id',
@@ -50,7 +49,6 @@ class CampaignController extends Controller
             'starts_at'                 => 'nullable|date',
             'expires_at'                => 'nullable|date|after:starts_at',
 
-            // Flow B: Bulk Inquiry
             'event_address'             => 'required_if:distribution_type,bulk|string',
             'event_date'                => 'required_if:distribution_type,bulk|date',
             'inquiry_notes'             => 'nullable|string',
@@ -72,24 +70,18 @@ class CampaignController extends Controller
             $status            = 'processing';
             $walletTransaction = null;
 
-            // --- ONLINE ESCROW LOGIC ---
             if ($validated['distribution_type'] === 'online') {
                 $totalRecipients = count($validated['recipient_ids']);
                 $totalCost       = $totalRecipients * $validated['reward_value_per_user'];
 
-                // Lock Escrow Funds
                 $walletTransaction = $company->wallet->debit(
                     amount: $totalCost,
                     description: "Campaign Escrow Lock: {$validated['name']}"
                 );
-            }
-            // --- BULK INQUIRY LOGIC ---
-            else {
-                // No Escrow. It's just a request for a quote.
+            } else {
                 $status = 'inquiry_pending';
             }
 
-            // Create Campaign
             $campaign = Campaign::create([
                 'company_id'         => $company->id,
                 'created_by_user_id' => $user->id,
@@ -114,7 +106,6 @@ class CampaignController extends Controller
                 'expires_at'         => $validated['expires_at'] ?? null,
             ]);
 
-            // Link transaction for Online flow
             if ($walletTransaction) {
                 $walletTransaction->update([
                     'reference_type' => get_class($campaign),
@@ -124,7 +115,6 @@ class CampaignController extends Controller
 
             DB::commit();
 
-            // Dispatch Jobs
             if ($campaign->distribution_type === 'online') {
                 ProcessCampaignJob::dispatch(
                     $campaign->id,
@@ -160,7 +150,6 @@ class CampaignController extends Controller
 
         DB::beginTransaction();
         try {
-            // 1. Refund the REMAINING Escrow
             if ($campaign->budget_locked > 0) {
                 $campaign->company->wallet->credit(
                     amount: $campaign->budget_locked,
@@ -168,13 +157,10 @@ class CampaignController extends Controller
                 );
             }
 
-            // 2. KILL ALL UNCLAIMED LINKS (Security Fix!)
-            // We set their expiry date to right now, so they immediately become invalid.
             $campaign->entitlements()->where('is_claimed', false)->update([
                 'expires_at' => now(),
             ]);
 
-            // 3. Update Campaign Status & zero out the lock
             $campaign->update([
                 'status'        => 'cancelled',
                 'budget_locked' => 0,

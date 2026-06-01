@@ -170,15 +170,15 @@ class CompanyController extends Controller
                 }
 
                 return [
-                    'id'             => $product->id,
-                    'category_id'    => $product->category_id,
-                    'name'           => $finalName,
-                    'main_image' => $finalImage ? asset('storage/' . $finalImage) : null,
-                    'mrp'            => (float) $finalMrp,
-                    'selling_price'  => (float) $finalPrice,
-                    'has_variants'   => $product->variants->count() > 0,
+                    'id'            => $product->id,
+                    'category_id'   => $product->category_id,
+                    'name'          => $finalName,
+                    'main_image'    => $finalImage ? asset('storage/' . $finalImage) : null,
+                    'mrp'           => (float) $finalMrp,
+                    'selling_price' => (float) $finalPrice,
+                    'has_variants'  => $product->variants->count() > 0,
 
-                    'variants'       => $product->variants->map(function ($v) use ($multiplier, $productPivot, $product) {
+                    'variants'      => $product->variants->map(function ($v) use ($multiplier, $productPivot, $product) {
                         $variantPivot = $v->companyOverrides->first()?->pivot;
 
                         $vPrice = ($variantPivot && is_numeric($variantPivot->override_selling_price)) ? $variantPivot->override_selling_price : ($v->selling_price ?? $productPivot?->override_selling_price ?? $product->selling_price);
@@ -195,7 +195,7 @@ class CompanyController extends Controller
                         ];
                     })->values()->toArray(),
 
-                    'tier_prices'    => $resolvedTiers->map(function ($t) {
+                    'tier_prices'   => $resolvedTiers->map(function ($t) {
                         return [
                             'variant_id'    => $t->product_variant_id,
                             'min_quantity'  => $t->min_quantity,

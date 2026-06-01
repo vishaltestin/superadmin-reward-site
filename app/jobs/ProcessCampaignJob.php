@@ -54,7 +54,7 @@ class ProcessCampaignJob implements ShouldQueue
                 $code  = null;
 
                 if ($campaign->reward_type === 'link') {
-                    $token = Str::random(64); 
+                    $token = Str::random(64);
                 } elseif ($campaign->reward_type === 'code') {
                     $code = strtoupper(Str::random(8));
                 }

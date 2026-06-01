@@ -17,9 +17,7 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class EmployeeController extends Controller
 {
-    /**
-     * Centralized security check to ensure the user is allowed to manage this vertical.
-     */
+    
     private function authorizeVerticalAccess(User $user, string $verticalSlug): Vertical
     {
         $vertical = Vertical::where('slug', $verticalSlug)->firstOrFail();
@@ -106,10 +104,8 @@ class EmployeeController extends Controller
             return $newUser;
         });
 
-        // It checks if the company has a custom alias, otherwise it slugs the company name.
         $companySlug = $admin->company->alias ?? Str::slug($admin->company->name);
 
-        // Ensure you have APP_URL defined in your .env (e.g., APP_URL=https://mycompany.in)
         $storefrontUrl = rtrim(config('app.storefront_url'), '/') . "/marketplace/{$companySlug}";
         Mail::to($user->email)->send(new WelcomeEmployeeMail($user, $rawPassword, $storefrontUrl));
 

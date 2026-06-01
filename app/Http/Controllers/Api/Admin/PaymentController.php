@@ -29,7 +29,6 @@ class PaymentController extends Controller
     {
         $company = $request->user()->company;
         
-        // Ensure wallet exists before querying
         if (!$company->wallet) {
             return response()->json(['data' => [], 'total' => 0]);
         }

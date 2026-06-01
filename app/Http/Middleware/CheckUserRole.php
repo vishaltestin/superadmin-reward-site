@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Middleware;
 
 use Closure;
@@ -16,9 +15,9 @@ class CheckUserRole
     {
         $user = $request->user();
 
-        if (!$user || !in_array($user->user_type, $roles)) {
+        if (! $user || ! in_array($user->user_type, $roles)) {
             return response()->json([
-                'message' => 'Forbidden: You do not have the required permissions to perform this action.'
+                'message' => 'Forbidden: You do not have the required permissions to perform this action.',
             ], 403);
         }
 
