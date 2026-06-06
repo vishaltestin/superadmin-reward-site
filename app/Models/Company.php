@@ -22,6 +22,7 @@ class Company extends Model
         'point_multiplier',
         'is_active',
         'is_approved',
+        'verification_status',
         'social_links',
         'terms_text',
         'privacy_text',

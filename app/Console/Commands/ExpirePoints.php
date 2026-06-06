@@ -1,61 +1,68 @@
 <?php
-
 namespace App\Console\Commands;
 
 use App\Models\Transaction;
+use Exception;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ExpirePoints extends Command
 {
-    protected $signature = 'points:expire';
-    protected $description = 'Sweeps the database for expired points and deducts them from user wallets.';
+    protected $signature   = 'points:expire';
+    protected $description = 'Sweeps the database for expired points and deducts them from user wallets safely.';
 
     public function handle()
     {
         $this->info('Starting points expiry sweep...');
 
-        // Find all credits that have passed their expiry date but still have a balance
         $expiredCredits = Transaction::where('type', 'credit')
             ->where('remaining_amount', '>', 0)
             ->whereNotNull('expires_at')
             ->where('expires_at', '<', now())
-            ->with('wallet')
             ->get();
 
         if ($expiredCredits->isEmpty()) {
             $this->info('No expired points found. Clean sheet!');
-            return;
+            return self::SUCCESS;
         }
 
-        $count = 0;
+        $count        = 0;
+        $totalExpired = 0;
 
         foreach ($expiredCredits as $credit) {
-            DB::transaction(function () use ($credit, &$count) {
-                $wallet = $credit->wallet;
-                $amountToExpire = $credit->remaining_amount;
+            try {
+                DB::transaction(function () use ($credit, &$count, &$totalExpired) {
+                    $lockedCredit = Transaction::where('id', $credit->id)
+                        ->lockForUpdate()
+                        ->first();
 
-                // 1. Set the credit's remaining amount to 0
-                $credit->update(['remaining_amount' => 0]);
+                    if ($lockedCredit && $lockedCredit->remaining_amount > 0) {
+                        $wallet         = $lockedCredit->wallet;
+                        $amountToExpire = $lockedCredit->remaining_amount;
 
-                // 2. Create a system debit transaction to explain where the points went
-                $wallet->transactions()->create([
-                    'type' => 'debit',
-                    'amount' => $amountToExpire,
-                    'remaining_amount' => 0,
-                    'description' => 'System Auto-Debit: Points Expired',
-                ]);
+                        $lockedCredit->update(['remaining_amount' => 0]);
 
-                // 3. Deduct from the user's total balance
-                $wallet->decrement('balance', $amountToExpire);
-                
-                $count++;
-            });
+                        $wallet->transactions()->create([
+                            'type'             => 'debit',
+                            'amount'           => $amountToExpire,
+                            'remaining_amount' => 0,
+                            'description'      => 'System Auto-Debit: Points Expired',
+                        ]);
+
+                        $wallet->decrement('balance', $amountToExpire);
+
+                        $count++;
+                        $totalExpired += $amountToExpire;
+                    }
+                });
+            } catch (Exception $e) {
+                Log::error("Failed to expire points for transaction ID {$credit->id}: " . $e->getMessage());
+            }
         }
 
-        $this->info("Successfully expired {$count} old point allocations.");
+        $this->info("Successfully expired {$totalExpired} points across {$count} old point allocations.");
+
+        return self::SUCCESS;
     }
 }
-
-// TODO
-// (Note: In production, you would add $schedule->command('points:expire')->daily(); to your routes/console.php).

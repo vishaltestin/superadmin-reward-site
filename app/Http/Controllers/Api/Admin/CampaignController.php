@@ -147,6 +147,11 @@ class CampaignController extends Controller
         if (in_array($campaign->status, ['completed', 'cancelled'])) {
             return response()->json(['message' => 'Cannot cancel a completed or already cancelled campaign.'], 400);
         }
+        if ($campaign->reward_type === 'points' && $campaign->budget_locked <= 0) {
+            return response()->json([
+                'message' => 'Cannot cancel this campaign because the points have already been distributed to users.',
+            ], 400);
+        }
 
         DB::beginTransaction();
         try {

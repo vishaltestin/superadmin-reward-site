@@ -95,6 +95,16 @@ class CompanyForm
                                         'Retail' => 'Retail',
                                         'Others' => 'Others',
                                     ]),
+                                Select::make('verification_status')
+            ->label('KYC / Verification Status')
+            ->options([
+                'pending' => 'Pending (No Docs)',
+                'submitted' => 'Submitted (Awaiting Review)',
+                'verified' => 'Verified (Approved)',
+                'rejected' => 'Rejected (Needs Fix)',
+            ])
+            ->default('pending')
+            ->helperText('Update this after reviewing the GST and PAN details.'),
                                 Textarea::make('address')->columnSpanFull(),
                             ]),
                     ]),

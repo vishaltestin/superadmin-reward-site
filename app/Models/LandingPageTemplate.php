@@ -12,6 +12,7 @@ class LandingPageTemplate extends Model
         'reward_type',
         'name',
         'title',
+        'thumbnail_path',
         'status',
         'global_theme_tokens',
         'seo_meta',

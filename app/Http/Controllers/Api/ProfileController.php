@@ -14,7 +14,7 @@ class ProfileController extends Controller
     {
         $user = $request->user();
 
-        $user->load(['company.wallet', 'wallet']);
+        $user->load(['company.wallet', 'wallet', 'addresses']);
 
         if ($user->user_type === 'sub_admin') {
             $user->load('managedVerticals');
@@ -35,26 +35,26 @@ class ProfileController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'first_name'        => 'required|string|max:255',
-            'last_name'         => 'required|string|max:255',
-            'Gender'            => 'required|string|max:50',
-            'dob'               => 'required|date',
-            'mobile'            => 'nullable|string|max:20',
-            'email'             => ['required', 'email', Rule::unique('users')->ignore($user->id)],
+            'first_name'              => 'required|string|max:255',
+            'last_name'               => 'required|string|max:255',
+            'gender'                  => 'required|string|max:50',
+            'dob'                     => 'required|date',
+            'mobile'                  => 'nullable|string|max:20',
+            'email'                   => ['required', 'email', Rule::unique('users')->ignore($user->id)],
 
-            'Address'           => 'required|string|max:255',
-            'City'              => 'required|string|max:100',
-            'State'             => 'required|string|max:100',
-            'Landmark'          => 'nullable|string|max:255',
-            'PinCode'           => 'required|string|max:20',
-            'Country'           => 'required|string|max:100',
+            'address_line_1'          => 'required|string|max:255',
+            'address_line_2'          => 'nullable|string|max:255', 
+            'city'                    => 'required|string|max:100',
+            'state'                   => 'required|string|max:100',
+            'pincode'                 => 'required|string|max:20',
+            'country'                 => 'required|string|max:100',
 
-            'Shipping_Address'  => 'nullable|string|max:255',
-            'Shipping_City'     => 'nullable|string|max:100',
-            'Shipping_State'    => 'nullable|string|max:100',
-            'Shipping_Landmark' => 'nullable|string|max:255',
-            'Shipping_PinCode'  => 'nullable|string|max:20',
-            'Shipping_Country'  => 'nullable|string|max:100',
+            'shipping_address_line_1' => 'nullable|string|max:255',
+            'shipping_address_line_2' => 'nullable|string|max:255',
+            'shipping_city'           => 'nullable|string|max:100',
+            'shipping_state'          => 'nullable|string|max:100',
+            'shipping_pincode'        => 'nullable|string|max:20',
+            'shipping_country'        => 'nullable|string|max:100',
         ]);
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $user) {
@@ -64,7 +64,7 @@ class ProfileController extends Controller
                 'last_name'  => $validated['last_name'],
                 'mobile'     => $validated['mobile'] ?? null,
                 'email'      => $validated['email'],
-                'gender'     => $validated['Gender'],
+                'gender'     => $validated['gender'],
                 'dob'        => $validated['dob'],
             ]);
 
@@ -73,28 +73,29 @@ class ProfileController extends Controller
                 [
                     'contact_name'   => $validated['first_name'] . ' ' . $validated['last_name'],
                     'contact_mobile' => $validated['mobile'] ?? 'N/A',
-                    'address_line_1' => $validated['Address'],
-                    'address_line_2' => $validated['Landmark'] ?? null,
-                    'city'           => $validated['City'],
-                    'state'          => $validated['State'],
-                    'pincode'        => $validated['PinCode'],
-                    'country'        => $validated['Country'],
+                    'address_line_1' => $validated['address_line_1'],
+                    'address_line_2' => $validated['address_line_2'] ?? null,
+                    'city'           => $validated['city'],
+                    'state'          => $validated['state'],
+                    'pincode'        => $validated['pincode'],
+                    'country'        => $validated['country'],
                     'is_default'     => true,
                 ]
             );
 
-            if (! empty($validated['Shipping_Address'])) {
+            // Shipping Address
+            if (! empty($validated['shipping_address_line_1'])) {
                 $user->addresses()->updateOrCreate(
                     ['type' => 'shipping'],
                     [
                         'contact_name'   => $validated['first_name'] . ' ' . $validated['last_name'],
                         'contact_mobile' => $validated['mobile'] ?? 'N/A',
-                        'address_line_1' => $validated['Shipping_Address'],
-                        'address_line_2' => $validated['Shipping_Landmark'] ?? null,
-                        'city'           => $validated['Shipping_City'],
-                        'state'          => $validated['Shipping_State'],
-                        'pincode'        => $validated['Shipping_PinCode'],
-                        'country'        => $validated['Shipping_Country'] ?? 'India',
+                        'address_line_1' => $validated['shipping_address_line_1'],
+                        'address_line_2' => $validated['shipping_address_line_2'] ?? null,
+                        'city'           => $validated['shipping_city'],
+                        'state'          => $validated['shipping_state'],
+                        'pincode'        => $validated['shipping_pincode'],
+                        'country'        => $validated['shipping_country'] ?? 'India',
                         'is_default'     => false,
                     ]
                 );
@@ -102,6 +103,7 @@ class ProfileController extends Controller
         });
 
         $user->load(['company.wallet', 'wallet', 'addresses']);
+
         if ($user->user_type === 'sub_admin') {
             $user->load('managedVerticals');
         }

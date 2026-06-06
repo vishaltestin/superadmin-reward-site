@@ -2,6 +2,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\LandingPageTemplateResource;
 use App\Models\EventVariable;
 use App\Models\LandingPageTemplate;
 use App\Models\Vertical;
@@ -11,7 +12,6 @@ use Illuminate\Validation\ValidationException;
 
 class LandingPageController extends Controller
 {
-
     private function getAccessibleVerticalIds($user): array
     {
         if ($user->user_type === 'sub_admin') {
@@ -100,9 +100,9 @@ class LandingPageController extends Controller
             $query->where('company_id', $user->company_id);
         }
 
-        $templates = $query->latest()->get(['id', 'name', 'title', 'status', 'updated_at']);
+        $templates = $query->latest()->get(['id', 'name', 'title', 'thumbnail_path', 'status', 'updated_at']);
 
-        return response()->json(['data' => $templates]);
+        return LandingPageTemplateResource::collection($templates);
     }
 
     public function show(Request $request, $id)
@@ -118,7 +118,7 @@ class LandingPageController extends Controller
             return response()->json(['message' => 'Unauthorized vertical access.'], 403);
         }
 
-        $variables = \App\Models\EventVariable::where('is_active', true)
+        $variables = EventVariable::where('is_active', true)
             ->whereIn('usage_type', ['landing_page', 'both'])
             ->where(function ($query) use ($template) {
                 $query->whereNull('event_id')
@@ -128,7 +128,7 @@ class LandingPageController extends Controller
 
         $template->available_variables = $variables;
 
-        return response()->json(['data' => $template]);
+        return new LandingPageTemplateResource($template);
     }
 
     public function duplicateMaster(Request $request, $id)
@@ -154,6 +154,7 @@ class LandingPageController extends Controller
                 'company_id'          => $user->company_id,
                 'name'                => $newName,
                 'title'               => $newTitle,
+                'thumbnail_path'      => $masterTemplate->thumbnail_path,
                 'status'              => 'draft',
                 'global_theme_tokens' => $masterTemplate->global_theme_tokens,
                 'seo_meta'            => $masterTemplate->seo_meta,
@@ -164,32 +165,9 @@ class LandingPageController extends Controller
 
         return response()->json([
             'message' => 'Template successfully duplicated.',
-            'data'    => $variation,
+            'data'    => new LandingPageTemplateResource($variation),
         ], 201);
     }
-
-    // public function update(Request $request, $id)
-    // {
-    //     $user     = $request->user();
-    //     $template = LandingPageTemplate::where('company_id', $user->company_id)->findOrFail($id);
-
-    //     $validated = $request->validate([
-    //         'name'                => 'sometimes|string|max:255',
-    //         'title'               => 'sometimes|string|max:255',
-    //         'status'              => 'sometimes|in:draft,published,archived',
-    //         'global_theme_tokens' => 'sometimes|array',
-    //         'seo_meta'            => 'sometimes|array',
-    //         'page_schema'         => 'sometimes|array',
-    //         'is_active'           => 'sometimes|boolean',
-    //     ]);
-
-    //     $template->update($validated);
-
-    //     return response()->json([
-    //         'message' => 'Landing page saved successfully.',
-    //         'data'    => $template,
-    //     ]);
-    // }
 
     public function update(Request $request, $id)
     {
@@ -200,11 +178,18 @@ class LandingPageController extends Controller
             'name'                => 'sometimes|string|max:255',
             'title'               => 'sometimes|string|max:255',
             'status'              => 'sometimes|in:draft,published,archived',
+            'thumbnail_path'      => 'nullable|string',
             'global_theme_tokens' => 'sometimes|array',
             'seo_meta'            => 'sometimes|array',
             'page_schema'         => 'sometimes|array',
             'is_active'           => 'sometimes|boolean',
         ]);
+
+        // Keep database clean by stripping base URLs
+        if (isset($validated['thumbnail_path'])) {
+            $baseUrl                     = asset('storage') . '/';
+            $validated['thumbnail_path'] = str_replace($baseUrl, '', $validated['thumbnail_path']);
+        }
 
         $contentParts = [
             $validated['title'] ?? '',
@@ -244,7 +229,7 @@ class LandingPageController extends Controller
 
         return response()->json([
             'message' => 'Landing page saved successfully.',
-            'data'    => $template,
+            'data'    => new LandingPageTemplateResource($template),
         ]);
     }
 

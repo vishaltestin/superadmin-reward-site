@@ -1,32 +1,30 @@
 <?php
-
 namespace App\Models;
 
+use App\Traits\HasWallet;
 use Database\Factories\UserFactory;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use App\Traits\HasWallet;
-use Filament\Models\Contracts\FilamentUser;
-use Filament\Panel;
-
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'company_id', 'user_type', 'first_name', 'last_name', 'mobile','gender', 'dob', 'is_active'])]
+#[Fillable(['name', 'email', 'password', 'company_id', 'user_type', 'first_name', 'last_name', 'mobile', 'gender', 'dob', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
-   use HasApiTokens, HasFactory, Notifiable, HasWallet;
+    use HasApiTokens, HasFactory, Notifiable, HasWallet;
 
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'is_active' => 'boolean',
+            'password'          => 'hashed',
+            'is_active'         => 'boolean',
         ];
     }
 
@@ -83,5 +81,12 @@ class User extends Authenticatable implements FilamentUser
     public function addresses(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(UserAddress::class);
+    }
+    /**
+     * Get all campaign entitlements issued to this user.
+     */
+    public function campaignEntitlements(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CampaignEntitlement::class, 'issued_to_user_id');
     }
 }

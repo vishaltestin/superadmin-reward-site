@@ -26,7 +26,7 @@ class LandingPageTemplateForm
                             ->preload()
                             ->required(),
 
-                            Select::make('reward_type')
+                        Select::make('reward_type')
                             ->label('Template Layout Type (Reward)')
                             ->options([
                                 'points' => 'Points Reward',
@@ -49,6 +49,14 @@ class LandingPageTemplateForm
                             ])
                             ->default('draft')
                             ->required(),
+
+                        FileUpload::make('thumbnail_path')
+                            ->label('Template Thumbnail')
+                            ->image()
+                            ->disk('public')
+                            ->directory('templates/thumbnails')
+                            ->columnSpan(2)
+                            ->helperText('This preview image will be visible in the Frontend Admin Portal.'),
                     ]),
 
                     Grid::make(2)->schema([

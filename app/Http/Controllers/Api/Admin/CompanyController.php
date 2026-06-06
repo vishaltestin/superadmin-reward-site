@@ -18,7 +18,15 @@ class CompanyController extends Controller
             'number_of_employee' => 'nullable|string',
         ]);
 
-        $request->user()->company->update($validated);
+        $company = $request->user()->company;
+
+        if ($request->filled('gst_no') || $request->filled('pan_no')) {
+            if ($company->verification_status !== 'verified') {
+                $validated['verification_status'] = 'submitted';
+            }
+        }
+
+        $company->update($validated);
 
         return response()->json([
             'message' => 'Business details updated successfully.',

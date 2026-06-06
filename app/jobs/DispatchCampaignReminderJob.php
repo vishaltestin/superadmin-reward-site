@@ -9,17 +9,20 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
 
-class DispatchCampaignCommsJob implements ShouldQueue
+class DispatchCampaignReminderJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     protected $campaignId;
+    protected $reminderType;
 
-    public function __construct($campaignId)
+    public function __construct($campaignId, $reminderType)
     {
-        $this->campaignId = $campaignId;
+        $this->campaignId   = $campaignId;
+        $this->reminderType = $reminderType;
     }
 
     public function handle(): void
@@ -39,10 +42,10 @@ class DispatchCampaignCommsJob implements ShouldQueue
         }
 
         $entitlements = $campaign->entitlements()
-            ->when($campaign->reward_type === 'points', function ($query) {
-                return $query->where('is_claimed', true);
-            }, function ($query) {
-                return $query->where('is_claimed', false);
+            ->where('is_claimed', false)
+            ->where(function ($query) {
+                $query->whereNull('reminded_at')
+                    ->orWhereDate('reminded_at', '<', Carbon::today());
             })
             ->get();
 
@@ -68,13 +71,18 @@ class DispatchCampaignCommsJob implements ShouldQueue
                 'claim_code'    => $entitlement->claim_code ?? '',
             ];
 
-            $htmlBody     = EmailParserService::parse($template->html_body, $payload);
-            $finalSubject = EmailParserService::parse($template->subject, $payload);
+            $htmlBody = EmailParserService::parse($template->html_body, $payload);
+
+            $baseSubject  = EmailParserService::parse($template->subject, $payload);
+            $finalSubject = $this->reminderType === 'expiry'
+                ? "Final Reminder: {$baseSubject}"
+                : "Reminder: {$baseSubject}";
 
             Mail::html($htmlBody, function ($message) use ($user, $finalSubject) {
-                $message->to($user->email)
-                    ->subject($finalSubject);
+                $message->to($user->email)->subject($finalSubject);
             });
+
+            $entitlement->update(['reminded_at' => now()]);
         }
     }
 }

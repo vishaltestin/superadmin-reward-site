@@ -2,6 +2,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\EmailTemplateResource;
 use App\Models\EmailTemplate;
 use App\Models\EventVariable;
 use App\Models\Vertical;
@@ -34,7 +35,7 @@ class EmailTemplateController extends Controller
             return response()->json(['message' => 'Unauthorized vertical access.'], 403);
         }
 
-        $variables = \App\Models\EventVariable::where('is_active', true)
+        $variables = EventVariable::where('is_active', true)
             ->whereIn('usage_type', ['email', 'both'])
             ->where(function ($query) use ($template) {
                 $query->whereNull('event_id')
@@ -44,7 +45,7 @@ class EmailTemplateController extends Controller
 
         $template->available_variables = $variables;
 
-        return response()->json(['data' => $template]);
+        return new EmailTemplateResource($template);
     }
 
     public function getSidebarEvents(Request $request)
@@ -53,7 +54,7 @@ class EmailTemplateController extends Controller
         $companyId   = $user->company_id;
         $verticalIds = $this->getAccessibleVerticalIds($user);
 
-        $variationCounts = \App\Models\EmailTemplate::where('company_id', $companyId)
+        $variationCounts = EmailTemplate::where('company_id', $companyId)
             ->selectRaw('event_id, count(*) as count')
             ->groupBy('event_id')
             ->pluck('count', 'event_id');
@@ -135,10 +136,9 @@ class EmailTemplateController extends Controller
             $query->where('reward_type', $request->reward_type);
         }
 
-        $templates = $query->latest()->get(['id', 'name', 'subject', 'thumbnail_path', 'updated_at']);
         $templates = $query->latest()->get(['id', 'name', 'subject', 'thumbnail_path', 'updated_at', 'reward_type']);
 
-        return response()->json(['data' => $templates]);
+        return EmailTemplateResource::collection($templates);
     }
 
     public function duplicateMaster(Request $request, $id)
@@ -153,14 +153,15 @@ class EmailTemplateController extends Controller
 
         $variation = DB::transaction(function () use ($masterTemplate, $user) {
             return EmailTemplate::create([
-                'event_id'    => $masterTemplate->event_id,
-                'company_id'  => $user->company_id,
-                'reward_type' => $masterTemplate->reward_type,
-                'name'        => 'Copy of ' . $masterTemplate->name,
-                'subject'     => $masterTemplate->subject,
-                'html_body'   => $masterTemplate->html_body,
-                'design_json' => $masterTemplate->design_json,
-                'is_active'   => true,
+                'event_id'       => $masterTemplate->event_id,
+                'company_id'     => $user->company_id,
+                'reward_type'    => $masterTemplate->reward_type,
+                'name'           => 'Copy of ' . $masterTemplate->name,
+                'thumbnail_path' => $masterTemplate->thumbnail_path,
+                'subject'        => $masterTemplate->subject,
+                'html_body'      => $masterTemplate->html_body,
+                'design_json'    => $masterTemplate->design_json,
+                'is_active'      => true,
             ]);
         });
 
@@ -169,28 +170,6 @@ class EmailTemplateController extends Controller
             'data'    => $variation,
         ], 201);
     }
-
-    // public function update(Request $request, $id)
-    // {
-    //     $user = $request->user();
-    //     $template = EmailTemplate::where('company_id', $user->company_id)->findOrFail($id);
-
-    //     $validated = $request->validate([
-    //         'name' => 'sometimes|string|max:255',
-    //         'subject' => 'sometimes|string|max:255',
-    //         'html_body' => 'sometimes|string',
-    //         'design_json' => 'sometimes|array',
-    //         'is_active' => 'sometimes|boolean',
-    //         'thumbnail_path' => 'nullable|string',
-    //     ]);
-
-    //     $template->update($validated);
-
-    //     return response()->json([
-    //         'message' => 'Template updated successfully.',
-    //         'data' => $template
-    //     ]);
-    // }
 
     public function update(Request $request, $id)
     {
@@ -239,7 +218,9 @@ class EmailTemplateController extends Controller
 
         return response()->json([
             'message' => 'Template updated successfully.',
+            // 'data'    => clone $template,
             'data'    => $template,
+            //  'data' => new EmailTemplateResource($template)
         ]);
     }
 
@@ -257,7 +238,7 @@ class EmailTemplateController extends Controller
     {
         $request->validate([
             'files'   => 'required|array',
-            'files.*' => 'image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'files.*' => 'image|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
         ]);
 
         $urls = [];

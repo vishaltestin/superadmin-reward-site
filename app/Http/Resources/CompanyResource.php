@@ -20,7 +20,10 @@ class CompanyResource extends JsonResource
             'address'             => $this->address,
             'points_name'         => $this->points_name,
             'wallet_balance'      => (float) ($this->wallet?->balance ?? 0.00),
+
             'is_approved'         => $this->is_approved,
+            'is_active'           => $this->is_active,
+            'verification_status' => $this->verification_status ?? 'pending',
 
             'social_links'        => empty($this->social_links) ? (object) [] : $this->social_links,
             'terms_text'          => $this->terms_text,

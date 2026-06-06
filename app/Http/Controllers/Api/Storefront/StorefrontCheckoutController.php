@@ -187,6 +187,7 @@ class StorefrontCheckoutController extends Controller
                 } else {
                     if ($appliedEntitlement) {
                         $appliedEntitlement->update(['is_claimed' => true, 'claimed_at' => now()]);
+                        $appliedEntitlement->campaign->decrement('budget_locked', $appliedEntitlement->reward_value);
                     }
                     foreach ($orderItemsData as $item) {
                         if ($item['product_variant_id']) {
@@ -234,6 +235,22 @@ class StorefrontCheckoutController extends Controller
                 'status'                    => 'processing',
                 'payment_gateway_reference' => $validated['payment_id'],
             ]);
+
+            if ($order->coupon_code) {
+                $entitlement = CampaignEntitlement::where('claim_code', $order->coupon_code)
+                    ->where('issued_to_user_id', $order->user_id)
+                    ->where('is_claimed', false)
+                    ->first();
+
+                if ($entitlement) {
+                    $entitlement->update([
+                        'is_claimed' => true,
+                        'claimed_at' => now(),
+                    ]);
+
+                    $entitlement->campaign->decrement('budget_locked', $entitlement->reward_value);
+                }
+            }
 
             foreach ($order->items as $item) {
                 if ($item->product_variant_id) {
