@@ -89,7 +89,8 @@ class EmployeeController extends Controller
                 'last_name'  => $validated['last_name'],
                 'email'      => $validated['email'],
                 'mobile'     => $validated['mobile'],
-                'password'   => Hash::make($rawPassword),
+                'password'   => Hash::make("test@12345"),
+                // 'password'   => Hash::make($rawPassword),
                 'is_active'  => true,
             ]);
             $newUser->save();

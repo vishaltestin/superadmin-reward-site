@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\Storefront\StorefrontCatalogController;
 use App\Http\Controllers\Api\Storefront\StorefrontCheckoutController;
 use App\Http\Controllers\Api\Storefront\StorefrontConfigController;
 use App\Http\Controllers\Api\Storefront\StorefrontUserController;
+use App\Http\Controllers\Api\Storefront\StorefrontFilterController;
 use App\Http\Controllers\Api\Website\DemoRequestController;
 use App\Http\Controllers\Api\Website\LeadController;
 use Illuminate\Support\Facades\Route;
@@ -149,7 +150,7 @@ Route::prefix('storefront')->group(function () {
         Route::get('/init', [StorefrontConfigController::class, 'initializeStore']);
         Route::post('/auth/login', [StorefrontAuthController::class, 'login']);
         Route::get('/search', [StorefrontCatalogController::class, 'search']);
-
+        Route::get('/products/filter', [StorefrontFilterController::class, 'index']);
         Route::get('/categories', [StorefrontCatalogController::class, 'categories']);
         Route::get('/products', [StorefrontCatalogController::class, 'products']);
         Route::get('/products/{productSlug}', [StorefrontCatalogController::class, 'productDetail']);
