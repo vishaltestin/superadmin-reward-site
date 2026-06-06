@@ -25,67 +25,6 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')->group(function () {
     Route::post('/auth/login', [AdminAuthController::class, 'login']);
-//     Route::get('/test-wipe', function () {
-//     $companyId = 4; // Change this to your target company ID
-
-//     // 🚨 Disable foreign key checks to prevent MySQL from blocking our wipe
-//     \Illuminate\Support\Facades\DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-
-//     \Illuminate\Support\Facades\DB::transaction(function () use ($companyId) {
-
-//         // 1. Get Campaign IDs (including soft-deleted ones)
-//         $campaignIds = \App\Models\Campaign::withTrashed()->where('company_id', $companyId)->pluck('id');
-
-//         // Use DB::table to FORCE physical deletions
-//         \Illuminate\Support\Facades\DB::table('campaign_entitlements')->whereIn('campaign_id', $campaignIds)->delete();
-//         \Illuminate\Support\Facades\DB::table('campaigns')->where('company_id', $companyId)->delete();
-
-//         // 2. Get Order IDs (including soft-deleted ones)
-//         $orderIds = \App\Models\Order::withTrashed()->where('company_id', $companyId)->pluck('id');
-//         \Illuminate\Support\Facades\DB::table('order_items')->whereIn('order_id', $orderIds)->delete();
-//         \Illuminate\Support\Facades\DB::table('orders')->where('company_id', $companyId)->delete();
-
-//         // 3. Gather Tenant User Collections
-//         $allUserIds = \App\Models\User::where('company_id', $companyId)->pluck('id');
-
-//         // 4. Clean out the Ledger Transactions and Wallets entirely
-//         $walletIds = \Illuminate\Support\Facades\DB::table('wallets')
-//             ->where(function($q) use ($companyId) {
-//                 $q->where('walletable_type', 'App\Models\Company')->where('walletable_id', $companyId);
-//             })
-//             ->orWhere(function($q) use ($allUserIds) {
-//                 $q->where('walletable_type', 'App\Models\User')->whereIn('walletable_id', $allUserIds);
-//             })
-//             ->pluck('id');
-
-//         \Illuminate\Support\Facades\DB::table('transactions')->whereIn('wallet_id', $walletIds)->delete();
-//         \Illuminate\Support\Facades\DB::table('wallets')->whereIn('id', $walletIds)->delete();
-
-//         // 5. Wipe Metadata Profiles & Delivery Addresses
-//         \Illuminate\Support\Facades\DB::table('rewardee_profiles')->where('company_id', $companyId)->delete();
-//         \Illuminate\Support\Facades\DB::table('user_addresses')->whereIn('user_id', $allUserIds)->delete();
-
-//         // 6. Delete all Rewardees/Employees
-//         \Illuminate\Support\Facades\DB::table('users')->where('company_id', $companyId)->where('user_type', 'rewardee')->delete();
-
-//         // 7. Re-initialize empty Wallets for your Company Admins
-//         $admins = \App\Models\User::where('company_id', $companyId)->whereIn('user_type', ['business_head', 'sub_admin'])->get();
-//         foreach ($admins as $admin) {
-//             $admin->wallet()->create(['balance' => 0.00]);
-//         }
-
-//         // 8. Re-initialize empty Wallet for the Company
-//         $company = \App\Models\Company::find($companyId);
-//         if ($company) {
-//             $company->wallet()->create(['balance' => 0.00]);
-//         }
-//     });
-
-//     // 🚨 Turn foreign key checks back on!
-//     \Illuminate\Support\Facades\DB::statement('SET FOREIGN_KEY_CHECKS=1;');
-
-//     return "Company {$companyId} transaction architecture successfully reset to zero! Foreign key checks restored.";
-// });
 
     Route::middleware(['auth:sanctum', 'is.admin'])->group(function () {
         Route::post('/auth/logout', [AdminAuthController::class, 'logout']);
