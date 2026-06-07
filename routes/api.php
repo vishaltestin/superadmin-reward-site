@@ -162,6 +162,7 @@ Route::prefix('storefront')->group(function () {
             Route::post('/user/change-password', [ProfileController::class, 'changePassword']);
             Route::post('/checkout', [StorefrontCheckoutController::class, 'checkout']);
             Route::post('/checkout/verify', [StorefrontCheckoutController::class, 'verifyPayment']);
+            Route::post('/checkout/cancel', [StorefrontCheckoutController::class, 'cancelOrder']);
             Route::prefix('user')->group(function () {
                 Route::get('/wallet', [StorefrontUserController::class, 'wallet']);
                 Route::get('/vouchers', [StorefrontUserController::class, 'vouchers']);
