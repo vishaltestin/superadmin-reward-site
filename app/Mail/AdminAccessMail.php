@@ -1,19 +1,15 @@
 <?php
-
 namespace App\Mail;
 
 use App\Models\User;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
-use Illuminate\Mail\Mailables\Headers;
 use Illuminate\Queue\SerializesModels;
 
-class AdminAccessMail extends Mailable implements ShouldQueue
+class AdminAccessMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     public function __construct(
         public User $user,
@@ -34,7 +30,7 @@ class AdminAccessMail extends Mailable implements ShouldQueue
     // {
     //     return new Headers(
     //         text: [
-    //             'X-Sib-Sandbox' => 'drop', 
+    //             'X-Sib-Sandbox' => 'drop',
     //         ],
     //     );
     // }
@@ -46,9 +42,9 @@ class AdminAccessMail extends Mailable implements ShouldQueue
     //     );
     // }
     public function content(): Content
-{
-    return new Content(
-        view: 'emails.admins.access',
-    );
-}
+    {
+        return new Content(
+            view: 'emails.admins.access',
+        );
+    }
 }

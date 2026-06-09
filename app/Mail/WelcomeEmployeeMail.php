@@ -2,17 +2,14 @@
 namespace App\Mail;
 
 use App\Models\User;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
-use Illuminate\Mail\Mailables\Headers;
 use Illuminate\Queue\SerializesModels;
 
-class WelcomeEmployeeMail extends Mailable implements ShouldQueue
+class WelcomeEmployeeMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     public function __construct(
         public User $user,
@@ -27,22 +24,6 @@ class WelcomeEmployeeMail extends Mailable implements ShouldQueue
         );
     }
 
-    // 2. Inject the Brevo Sandbox header
-    // public function headers(): Headers
-    // {
-    //     return new Headers(
-    //         text: [
-    //             'X-Sib-Sandbox' => 'drop',
-    //         ],
-    //     );
-    // }
-
-    // public function content(): Content
-    // {
-    //     return new Content(
-    //         markdown: 'emails.employees.welcome',
-    //     );
-    // }
     public function content(): Content
     {
         return new Content(
