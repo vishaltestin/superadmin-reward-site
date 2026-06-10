@@ -8,11 +8,13 @@ use Illuminate\Http\Request;
 
 class ExperienceEnquiryController extends Controller
 {
+
     public function submit(Request $request)
     {
         $productSlug = $request->route('productSlug');
         $slug        = $request->route('slug');
-        $product     = Product::where('slug', $productSlug)
+
+        $product = Product::where('slug', $productSlug)
             ->where('is_active', true)
             ->firstOrFail();
 
@@ -28,6 +30,16 @@ class ExperienceEnquiryController extends Controller
             'message'        => 'nullable|string|max:1000',
         ]);
 
+        $existingEnquiry = ExperienceEnquiry::where('product_id', $product->id)
+            ->where('user_id', $request->user()->id)
+            ->exists();
+
+        if ($existingEnquiry) {
+            return response()->json([
+                'message' => 'You have already submitted an enquiry for this experience.',
+            ], 409);
+        }
+
         ExperienceEnquiry::create([
             'product_id' => $product->id,
             'user_id'    => $request->user()->id,
@@ -39,7 +51,6 @@ class ExperienceEnquiryController extends Controller
             'message' => 'Enquiry submitted successfully.',
         ]);
     }
-
     public function myEnquiries(Request $request)
     {
         return ExperienceEnquiry::with('product')
