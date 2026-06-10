@@ -18,8 +18,10 @@ use App\Http\Controllers\Api\Storefront\StorefrontAuthController;
 use App\Http\Controllers\Api\Storefront\StorefrontCatalogController;
 use App\Http\Controllers\Api\Storefront\StorefrontCheckoutController;
 use App\Http\Controllers\Api\Storefront\StorefrontConfigController;
-use App\Http\Controllers\Api\Storefront\StorefrontUserController;
 use App\Http\Controllers\Api\Storefront\StorefrontFilterController;
+use App\Http\Controllers\Api\Storefront\StorefrontUserController;
+use App\Http\Controllers\Api\Storefront\VoucherClaimController;
+use App\Http\Controllers\Api\Storefront\ExperienceEnquiryController;
 use App\Http\Controllers\Api\Website\DemoRequestController;
 use App\Http\Controllers\Api\Website\LeadController;
 use Illuminate\Support\Facades\Route;
@@ -154,7 +156,6 @@ Route::prefix('storefront')->group(function () {
         Route::get('/categories', [StorefrontCatalogController::class, 'categories']);
         Route::get('/products', [StorefrontCatalogController::class, 'products']);
         Route::get('/products/{productSlug}', [StorefrontCatalogController::class, 'productDetail']);
-
         Route::middleware(['auth:sanctum', 'storefront.tenant'])->group(function () {
             Route::post('/auth/logout', [StorefrontAuthController::class, 'logout']);
             Route::get('/user/me', [ProfileController::class, 'me']);
@@ -163,6 +164,23 @@ Route::prefix('storefront')->group(function () {
             Route::post('/checkout', [StorefrontCheckoutController::class, 'checkout']);
             Route::post('/checkout/verify', [StorefrontCheckoutController::class, 'verifyPayment']);
             Route::post('/checkout/cancel', [StorefrontCheckoutController::class, 'cancelOrder']);
+            Route::post(
+                'vouchers/{productSlug}/claim',
+                [VoucherClaimController::class, 'claim']
+            );
+            Route::get(
+                'my-vouchers',
+                [VoucherClaimController::class, 'myClaims']
+            );
+            Route::post(
+                'experiences/{productSlug}/enquire',
+                [ExperienceEnquiryController::class, 'submit']
+            );
+
+            Route::get(
+                'my-enquiries',
+                [ExperienceEnquiryController::class, 'myEnquiries']
+            );
             Route::prefix('user')->group(function () {
                 Route::get('/wallet', [StorefrontUserController::class, 'wallet']);
                 Route::get('/vouchers', [StorefrontUserController::class, 'vouchers']);

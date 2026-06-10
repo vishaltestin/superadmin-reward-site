@@ -89,4 +89,12 @@ class User extends Authenticatable implements FilamentUser
     {
         return $this->hasMany(CampaignEntitlement::class, 'issued_to_user_id');
     }
+    public function voucherClaims()
+    {
+        return $this->hasMany(VoucherClaim::class);
+    }
+    public function experienceEnquiries()
+    {
+        return $this->hasMany(ExperienceEnquiry::class);
+    }
 }

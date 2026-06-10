@@ -107,4 +107,13 @@ class Product extends Model
     {
         return $this->hasMany(VoucherCode::class);
     }
+
+    public function voucherClaims()
+    {
+        return $this->hasMany(VoucherClaim::class);
+    }
+    public function experienceEnquiries()
+    {
+        return $this->hasMany(ExperienceEnquiry::class);
+    }
 }
