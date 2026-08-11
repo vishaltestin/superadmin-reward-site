@@ -2,8 +2,8 @@ Integrate Razorpay Standard Web Checkout into this codebase.
 
 === CREDENTIALS ===
 
-RAZORPAY_KEY_ID: rzp_test_SxDHy7rZ9WDag5
-RAZORPAY_KEY_SECRET: OfOhNKP5etjXwbK2gPUarBKk
+RAZORPAY_KEY_ID: MYTESTKEY
+RAZORPAY_KEY_SECRET: MYTESTSECRET
 
 === TASK ===
 
