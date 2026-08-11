@@ -199,6 +199,7 @@ class StorefrontCatalogController extends Controller
                         'name'              => $v->name,
                         'sku'               => $v->sku,
                         'image_url'         => $finalVariantImage ? asset('storage/' . $finalVariantImage) : null,
+                        'gallery_images'    => array_map(fn ($img) => asset('storage/' . $img), $v->gallery_images ?? []),
                         'mrp'               => (float) $finalVariantMrp,
                         'selling_price'     => (float) $finalVariantSellingPrice,
                         'points_equivalent' => (int) ceil((float) $finalVariantSellingPrice * $multiplier),

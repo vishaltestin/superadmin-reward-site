@@ -1,6 +1,7 @@
 <?php
 namespace App\Models;
 
+use App\Helpers\VariantAttributeHelper;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -14,6 +15,7 @@ class ProductVariant extends Model
         'name',
         'sku',
         'image',
+        'gallery_images',
         'mrp',
         'selling_price',
         'attributes',
@@ -26,10 +28,24 @@ class ProductVariant extends Model
         return [
             'mrp'            => 'decimal:2',
             'selling_price'  => 'decimal:2',
-            'attributes'     => 'array', 
+            'attributes'     => 'array',
+            'gallery_images' => 'array',
             'is_active'      => 'boolean',
             'stock_quantity' => 'integer',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // Attribute keys are always stored normalized ("size" / "Size" / "SIZE" -> "Size"),
+        // no matter which code path saves the variant (admin panel, API, imports...).
+        static::saving(function (ProductVariant $variant): void {
+            $attributes = $variant->getAttribute('attributes');
+
+            if (is_array($attributes)) {
+                $variant->setAttribute('attributes', VariantAttributeHelper::normalizeMap($attributes));
+            }
+        });
     }
 
     public function product(): BelongsTo
