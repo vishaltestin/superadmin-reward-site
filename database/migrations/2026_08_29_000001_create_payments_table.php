@@ -14,9 +14,9 @@ return new class extends Migration
             // What is being paid for: an Order (claim/cart checkout) or a Wallet (top-up)
             $table->morphs('payable');
 
-            $table->string('provider')->default('razorpay');
-            $table->string('provider_order_id');               // razorpay order_XXXX
-            $table->string('provider_payment_id')->nullable(); // razorpay pay_XXXX
+            $table->string('provider', 50)->default('razorpay');
+            $table->string('provider_order_id', 190);
+            $table->string('provider_payment_id', 190)->nullable();
 
             $table->unsignedBigInteger('amount_paise'); // integer paise — never floats
             $table->string('currency', 3)->default('INR');
