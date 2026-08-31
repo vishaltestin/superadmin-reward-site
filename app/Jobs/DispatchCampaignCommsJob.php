@@ -22,9 +22,38 @@ class DispatchCampaignCommsJob implements ShouldQueue
         $this->campaignId = $campaignId;
     }
 
+    /**
+     * Claim links must be built with config() — env() returns null inside
+     * queued jobs once the config is cached — and must include the tenant
+     * slug segment, because the storefront router is /{slug}/claim (deployed
+     * under /marketplace/{slug}/claim). The old link ({base}/claim?token=…)
+     * 404'd in every reward email.
+     */
+    private function claimUrl(Campaign $campaign, ?string $claimToken): ?string
+    {
+        if (! $claimToken) {
+            return null;
+        }
+
+        $base = rtrim((string) config('app.storefront_url'), '/');
+
+        // Guard against a STOREFRONT_URL that already ends in "/marketplace"
+        // (a common .env mistake): appending our own "/marketplace/{slug}"
+        // produced ".../marketplace/marketplace/{slug}/..." in every email.
+        $base = preg_replace('#/marketplace/?$#i', '', $base);
+
+        $slug = $campaign->company?->alias;
+
+        if (! $base || ! $slug) {
+            return null;
+        }
+
+        return "{$base}/marketplace/{$slug}/claim?token={$claimToken}";
+    }
+
     public function handle(): void
     {
-        $campaign = Campaign::with('entitlements.user.company')->findOrFail($this->campaignId);
+        $campaign = Campaign::with('entitlements.user.company', 'company')->findOrFail($this->campaignId);
 
         $config     = $campaign->config_json;
         $templateId = $config['email_template_id'] ?? null;
@@ -52,10 +81,7 @@ class DispatchCampaignCommsJob implements ShouldQueue
                 continue;
             }
 
-            $claimUrl = null;
-            if ($campaign->reward_type === 'link') {
-                $claimUrl = rtrim(env('STOREFRONT_URL'), '/') . '/claim?token=' . $entitlement->claim_token;
-            }
+            $claimUrl = $this->claimUrl($campaign, $entitlement->claim_token);
 
             $payload = [
                 'first_name'    => $user->first_name,

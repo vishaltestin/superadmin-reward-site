@@ -26,6 +26,18 @@ class CampaignController extends Controller
             ->with(['vertical', 'event'])
             ->findOrFail($id);
 
+        // Rich detail payload for the campaign detail page: per-recipient
+        // reward status (who claimed, when, with which code) plus wallet
+        // impact. Loaded additively — index/list consumers are unaffected.
+        $campaign->load([
+            'entitlements' => function ($query) {
+                $query->select(['id', 'campaign_id', 'issued_to_user_id', 'reward_value', 'claim_code', 'is_claimed', 'claimed_at', 'expires_at', 'created_at'])
+                    ->orderByDesc('is_claimed')
+                    ->orderBy('created_at')
+                    ->with(['user:id,first_name,last_name,email']);
+            },
+        ]);
+
         return response()->json(['data' => $campaign]);
     }
 
@@ -62,6 +74,28 @@ class CampaignController extends Controller
             'config_json'               => 'nullable|array',
         ]);
 
+        // ── Landing-page compatibility guard (reward LINK campaigns) ─────────
+        // The claim page can only render templates that contain a visible
+        // RewardSelector block — without it employees land on a page with no
+        // way to pick their product (the claim API would silently fall back
+        // to a default page, ignoring HR's chosen design). Reject the broken
+        // combination at save time so what HR previews is what employees get.
+        if (($validated['distribution_type'] ?? null) === 'online'
+            && ($validated['reward_type'] ?? null) === 'link'
+            && ! empty($validated['config_json']['landing_page_template_id'])) {
+
+            $template = \App\Models\LandingPageTemplate::find(
+                $validated['config_json']['landing_page_template_id']
+            );
+
+            if (! $template || ! $template->hasVisibleRewardSelector()) {
+                return response()->json([
+                    'message' => 'The selected landing page design cannot be used for reward-link campaigns because it has no reward picker section. Please choose a claim-capable design (or skip the landing step).',
+                    'error'   => 'landing_template_missing_reward_selector',
+                ], 422);
+            }
+        }
+
         try {
             DB::beginTransaction();
 
@@ -71,7 +105,22 @@ class CampaignController extends Controller
             $walletTransaction = null;
 
             if ($validated['distribution_type'] === 'online') {
-                $totalRecipients = count($validated['recipient_ids']);
+                // ── Tenant guard: recipients must be this company's own active
+                //    rewardees. Validation alone (exists:users,id) would let a
+                //    company gift points to any user on the platform.
+                $recipientIds = \App\Models\User::whereIn('id', $validated['recipient_ids'])
+                    ->where('company_id', $company->id)
+                    ->where('user_type', 'rewardee')
+                    ->where('is_active', true)
+                    ->pluck('id')
+                    ->toArray();
+
+                $unknown = array_diff($validated['recipient_ids'], $recipientIds);
+                if (! empty($unknown)) {
+                    throw new Exception('Some recipients are invalid: they must be active members of your company.');
+                }
+
+                $totalRecipients = count($recipientIds);
                 $totalCost       = $totalRecipients * $validated['reward_value_per_user'];
 
                 $walletTransaction = $company->wallet->debit(
@@ -79,7 +128,8 @@ class CampaignController extends Controller
                     description: "Campaign Escrow Lock: {$validated['name']}"
                 );
             } else {
-                $status = 'inquiry_pending';
+                $status       = 'inquiry_pending';
+                $recipientIds = [];
             }
 
             $campaign = Campaign::create([
@@ -118,7 +168,7 @@ class CampaignController extends Controller
             if ($campaign->distribution_type === 'online') {
                 ProcessCampaignJob::dispatch(
                     $campaign->id,
-                    $validated['recipient_ids'],
+                    $recipientIds,
                     $validated['reward_value_per_user']
                 );
             }
@@ -141,20 +191,30 @@ class CampaignController extends Controller
 
     public function cancel(Request $request, $id)
     {
-        $campaign = Campaign::where('company_id', $request->user()->company_id)
-            ->findOrFail($id);
-
-        if (in_array($campaign->status, ['completed', 'cancelled'])) {
-            return response()->json(['message' => 'Cannot cancel a completed or already cancelled campaign.'], 400);
-        }
-        if ($campaign->reward_type === 'points' && $campaign->budget_locked <= 0) {
-            return response()->json([
-                'message' => 'Cannot cancel this campaign because the points have already been distributed to users.',
-            ], 400);
-        }
-
-        DB::beginTransaction();
         try {
+            DB::beginTransaction();
+
+            // Lock the campaign row for the whole refund computation. Without
+            // this, a claim fulfilling concurrently (which decrements
+            // budget_locked in its own transaction) could race the refund and
+            // the company would be paid back MORE than the remaining escrow.
+            $campaign = Campaign::where('company_id', $request->user()->company_id)
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (in_array($campaign->status, ['completed', 'cancelled'])) {
+                DB::rollBack();
+                return response()->json(['message' => 'Cannot cancel a completed or already cancelled campaign.'], 400);
+            }
+
+            if ($campaign->reward_type === 'points' && $campaign->budget_locked <= 0) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Cannot cancel this campaign because the points have already been distributed to users.',
+                ], 400);
+            }
+
             if ($campaign->budget_locked > 0) {
                 $campaign->company->wallet->credit(
                     amount: $campaign->budget_locked,
@@ -172,6 +232,7 @@ class CampaignController extends Controller
             ]);
 
             DB::commit();
+
             return response()->json(['message' => 'Campaign cancelled and remaining funds refunded.']);
         } catch (Exception $e) {
             DB::rollBack();

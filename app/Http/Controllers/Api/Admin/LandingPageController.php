@@ -81,8 +81,9 @@ class LandingPageController extends Controller
         $user = $request->user();
 
         $request->validate([
-            'event_id' => 'required|exists:events,id',
-            'tab'      => 'required|in:global,variations',
+            'event_id'    => 'required|exists:events,id',
+            'tab'         => 'required|in:global,variations',
+            'reward_type' => 'nullable|in:points,code,link',
         ]);
 
         $event = \App\Models\Event::findOrFail($request->event_id);
@@ -100,7 +101,19 @@ class LandingPageController extends Controller
             $query->where('company_id', $user->company_id);
         }
 
-        $templates = $query->latest()->get(['id', 'name', 'title', 'thumbnail_path', 'status', 'updated_at']);
+        $columns = ['id', 'name', 'title', 'thumbnail_path', 'status', 'updated_at'];
+
+        if ($request->reward_type === 'link') {
+            $columns[] = 'page_schema';
+        }
+
+        $templates = $query->latest()->get($columns);
+
+        if ($request->reward_type === 'link') {
+            $templates = $templates
+                ->filter(fn(LandingPageTemplate $template) => $template->hasVisibleRewardSelector())
+                ->values();
+        }
 
         return LandingPageTemplateResource::collection($templates);
     }

@@ -19,7 +19,7 @@ return [
 
     'allowed_methods'          => ['*'],
 
-    'allowed_origins'          => ['https://customer.rewardsapp.in', 'http://localhost:5173', "https://rewardsapp.in"],
+    'allowed_origins'          => ['https://customer.rewardsapp.in', 'http://localhost:5173', "https://rewardsapp.in","http://localhost:5174"],
 
     'allowed_origins_patterns' => [],
 

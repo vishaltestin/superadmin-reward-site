@@ -3,8 +3,8 @@ namespace App\Http\Controllers\Api\Storefront;
 
 use App\Http\Controllers\Controller;
 use App\Models\Company;
-use App\Models\CompanyProductTierPrice;
 use App\Models\Product;
+use App\Services\PricingService;
 use Illuminate\Http\Request;
 
 class StorefrontCatalogController extends Controller
@@ -18,13 +18,10 @@ class StorefrontCatalogController extends Controller
 
     public function categories(Request $request, $slug)
     {
-        $company           = $this->resolveTenant($slug);
-        $hiddenCategoryIds = $company->hidden_category_ids ?? [];
+        $company = $this->resolveTenant($slug);
 
-        $categories = $company->categories()
-            ->where('categories.is_active', true)
-            ->whereNotIn('categories.id', $hiddenCategoryIds)
-            ->orderBy('categories.sort_order', 'asc')
+        $categories = $company->categoriesByDisplayOrder()
+            ->whereIn('categories.id', $company->activeCategoryIds())
             ->get([
                 'categories.id',
                 'categories.parent_id',
@@ -42,7 +39,7 @@ class StorefrontCatalogController extends Controller
         $company    = $this->resolveTenant($slug);
         $multiplier = (float) ($company->point_multiplier ?? 1.00);
 
-        $allowedCategoryIds = $company->categories()->pluck('categories.id')->toArray();
+        $allowedCategoryIds = $company->activeCategoryIds();
         $hiddenCategoryIds  = $company->hidden_category_ids ?? [];
         $hiddenProductIds   = $company->hidden_product_ids ?? [];
 
@@ -110,7 +107,7 @@ class StorefrontCatalogController extends Controller
             return response()->json(['message' => 'Product unavailable.'], 404);
         }
 
-        $allowedCategoryIds = $company->categories()->pluck('categories.id')->toArray();
+        $allowedCategoryIds = $company->activeCategoryIds();
         $hiddenCategoryIds  = $company->hidden_category_ids ?? [];
 
         $product = Product::where('slug', $productSlug)
@@ -137,31 +134,7 @@ class StorefrontCatalogController extends Controller
         $fiatMrp          = $productPivot?->override_mrp ?? $product->mrp;
         $fiatSellingPrice = $productPivot?->override_selling_price ?? $product->selling_price;
 
-        $globalTiers  = $product->tierPrices;
-        $companyTiers = CompanyProductTierPrice::where('company_id', $company->id)
-            ->where('product_id', $product->id)
-            ->get();
-
-        $resolvedTiers = collect();
-
-        $baseCompanyTiers = $companyTiers->whereNull('product_variant_id');
-        if ($baseCompanyTiers->isNotEmpty()) {
-            $resolvedTiers = $resolvedTiers->concat($baseCompanyTiers);
-        } else {
-            $resolvedTiers = $resolvedTiers->concat($globalTiers->whereNull('product_variant_id'));
-        }
-
-        foreach ($product->variants as $variant) {
-            $vCompanyTiers = $companyTiers->where('product_variant_id', $variant->id);
-
-            if ($vCompanyTiers->isNotEmpty()) {
-                $resolvedTiers = $resolvedTiers->concat($vCompanyTiers);
-            } else {
-                if ($baseCompanyTiers->isEmpty()) {
-                    $resolvedTiers = $resolvedTiers->concat($globalTiers->where('product_variant_id', $variant->id));
-                }
-            }
-        }
+        $resolvedTiers = PricingService::resolveTiers($product, $company);
 
         return response()->json([
             'data' => [
@@ -199,7 +172,7 @@ class StorefrontCatalogController extends Controller
                         'name'              => $v->name,
                         'sku'               => $v->sku,
                         'image_url'         => $finalVariantImage ? asset('storage/' . $finalVariantImage) : null,
-                        'gallery_images'    => array_map(fn ($img) => asset('storage/' . $img), $v->gallery_images ?? []),
+                        'gallery_images'    => array_map(fn($img) => asset('storage/' . $img), $v->gallery_images ?? []),
                         'mrp'               => (float) $finalVariantMrp,
                         'selling_price'     => (float) $finalVariantSellingPrice,
                         'points_equivalent' => (int) ceil((float) $finalVariantSellingPrice * $multiplier),
@@ -230,7 +203,7 @@ class StorefrontCatalogController extends Controller
             return response()->json(['data' => []]);
         }
 
-        $allowedCategoryIds = $company->categories()->pluck('categories.id')->toArray();
+        $allowedCategoryIds = $company->activeCategoryIds();
         $hiddenCategoryIds  = $company->hidden_category_ids ?? [];
         $hiddenProductIds   = $company->hidden_product_ids ?? [];
 
@@ -249,14 +222,16 @@ class StorefrontCatalogController extends Controller
             $query->where('category_id', $request->category_id);
         }
 
-        $query->where(function ($q) use ($queryText, $company) {
-            $q->where('name', 'LIKE', "%{$queryText}%")
-                ->orWhere('short_description', 'LIKE', "%{$queryText}%")
-                ->orWhere('tags', 'LIKE', "%{$queryText}%");
+        $escaped = addcslashes($queryText, '%_\\\\');
 
-            $q->orWhereHas('customCompanies', function ($subQ) use ($queryText, $company) {
+        $query->where(function ($q) use ($escaped, $queryText, $company) {
+            $q->where('name', 'LIKE', "%{$escaped}%")
+                ->orWhere('short_description', 'LIKE', "%{$escaped}%")
+                ->orWhereJsonContains('tags', $queryText);
+
+            $q->orWhereHas('customCompanies', function ($subQ) use ($escaped, $company) {
                 $subQ->where('company_id', $company->id)
-                    ->where('override_name', 'LIKE', "%{$queryText}%");
+                    ->where('override_name', 'LIKE', "%{$escaped}%");
             });
         });
 

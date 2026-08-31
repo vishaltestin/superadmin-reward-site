@@ -13,6 +13,19 @@ use Illuminate\Validation\Rule;
 
 class SubAdminController extends Controller
 {
+    private function validateCompanyVerticals(Request $request, array $verticalIds): ?array
+    {
+        $companyVerticalIds = $request->user()->company->verticals()->pluck('verticals.id')->toArray();
+
+        $invalid = array_diff($verticalIds, $companyVerticalIds);
+
+        if (! empty($invalid)) {
+            return $companyVerticalIds;
+        }
+
+        return null;
+    }
+
     public function index(Request $request)
     {
         $subAdmins = User::where('company_id', $request->user()->company_id)
@@ -36,6 +49,12 @@ class SubAdminController extends Controller
             'managed_vertical_ids'   => 'required|array|min:1',
             'managed_vertical_ids.*' => 'exists:verticals,id',
         ]);
+
+        if ($this->validateCompanyVerticals($request, $validated['managed_vertical_ids']) !== null) {
+            return response()->json([
+                'message' => 'Selected verticals are not part of your company.',
+            ], 422);
+        }
 
         $rawPassword = Str::random(10);
 
@@ -82,6 +101,12 @@ class SubAdminController extends Controller
             'managed_vertical_ids'   => 'required|array|min:1',
             'managed_vertical_ids.*' => 'exists:verticals,id',
         ]);
+
+        if ($this->validateCompanyVerticals($request, $validated['managed_vertical_ids']) !== null) {
+            return response()->json([
+                'message' => 'Selected verticals are not part of your company.',
+            ], 422);
+        }
 
         DB::transaction(function () use ($validated, $subAdmin) {
             $subAdmin->update([

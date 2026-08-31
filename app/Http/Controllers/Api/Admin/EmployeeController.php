@@ -17,7 +17,6 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class EmployeeController extends Controller
 {
-    
     private function authorizeVerticalAccess(User $user, string $verticalSlug): Vertical
     {
         $vertical = Vertical::where('slug', $verticalSlug)->firstOrFail();
@@ -89,7 +88,6 @@ class EmployeeController extends Controller
                 'last_name'  => $validated['last_name'],
                 'email'      => $validated['email'],
                 'mobile'     => $validated['mobile'],
-                // 'password'   => Hash::make("test@12345"),
                 'password'   => Hash::make($rawPassword),
                 'is_active'  => true,
             ]);
@@ -278,30 +276,6 @@ class EmployeeController extends Controller
         }
     }
 
-    // public function promoteToAdmin(Request $request, $id)
-    // {
-    //     $admin = $request->user();
-
-    //     $validated = $request->validate([
-    //         'managed_vertical_ids'   => 'required|array|min:1',
-    //         'managed_vertical_ids.*' => 'exists:verticals,id',
-    //     ]);
-
-    //     $employee = User::where('company_id', $admin->company_id)
-    //         ->where('user_type', 'rewardee')
-    //         ->findOrFail($id);
-
-    //     DB::transaction(function () use ($employee, $validated) {
-    //         $employee->update(['user_type' => 'sub_admin']);
-
-    //         $employee->managedVerticals()->sync($validated['managed_vertical_ids']);
-
-    //         // 3. (Optional) Remove their rewardee profile if they shouldn't receive rewards anymore
-    //         // $employee->rewardeeProfile()->delete();
-    //     });
-
-    //     return response()->json(['message' => 'Employee successfully promoted to Sub-Admin.']);
-    // }
     public function promoteToAdmin(Request $request, $id)
     {
         $admin = $request->user();
@@ -310,6 +284,14 @@ class EmployeeController extends Controller
             'managed_vertical_ids'   => 'required|array|min:1',
             'managed_vertical_ids.*' => 'exists:verticals,id',
         ]);
+
+        $companyVerticalIds = $admin->company->verticals()->pluck('verticals.id')->toArray();
+
+        if (! empty(array_diff($validated['managed_vertical_ids'], $companyVerticalIds))) {
+            return response()->json([
+                'message' => 'Selected verticals are not part of your company.',
+            ], 422);
+        }
 
         $employee = User::where('company_id', $admin->company_id)
             ->where('user_type', 'rewardee')
@@ -349,7 +331,22 @@ class EmployeeController extends Controller
             $this->authorizeVerticalAccess($admin, $currentVerticalSlug);
         }
 
-        $targetUser->delete();
+        $hasOrders        = $targetUser->orders()->exists();
+        $hasWalletHistory = $targetUser->wallet && $targetUser->wallet->transactions()->exists();
+
+        if ($hasOrders || $hasWalletHistory) {
+            $targetUser->update(['is_active' => false]);
+
+            return response()->json([
+                'message' => 'This member has order or wallet history, so their account was deactivated instead of deleted. They can no longer log in or receive rewards.',
+            ]);
+        }
+
+        DB::transaction(function () use ($targetUser) {
+            $targetUser->wallet?->delete();
+
+            $targetUser->delete();
+        });
 
         return response()->json([
             'message' => 'Recipient deleted successfully.',

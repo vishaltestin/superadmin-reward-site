@@ -50,4 +50,26 @@ class LandingPageTemplate extends Model
     {
         return $this->belongsTo(Company::class);
     }
+
+    /**
+     * Whether this template's page_schema contains a VISIBLE RewardSelector
+     * block — the section a reward-link claim page cannot function without
+     * (it is the only way for the employee to pick a product). Templates in
+     * the legacy block dialect (hero / claim_ui / ...) never satisfy this.
+     */
+    public function hasVisibleRewardSelector(): bool
+    {
+        foreach ($this->page_schema ?? [] as $block) {
+            if (! is_array($block)) {
+                continue;
+            }
+
+            if (($block['type'] ?? null) === 'RewardSelector'
+                && ($block['isVisible'] ?? true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

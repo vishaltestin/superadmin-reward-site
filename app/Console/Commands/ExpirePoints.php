@@ -38,19 +38,33 @@ class ExpirePoints extends Command
                         ->first();
 
                     if ($lockedCredit && $lockedCredit->remaining_amount > 0) {
-                        $wallet         = $lockedCredit->wallet;
-                        $amountToExpire = $lockedCredit->remaining_amount;
+                        $wallet          = $lockedCredit->wallet;
+                        $ledgerRemaining = (float) $lockedCredit->remaining_amount;
+                        $walletBalance   = (float) $wallet->balance;
+
+                        $amountToExpire = min($ledgerRemaining, max(0.0, $walletBalance));
+
+                        if ($walletBalance < $ledgerRemaining) {
+                            Log::critical('Wallet balance below ledger remaining on expiry — clamping.', [
+                                'wallet_id'        => $wallet->id,
+                                'balance'          => $walletBalance,
+                                'ledger_remaining' => $ledgerRemaining,
+                                'transaction_id'   => $lockedCredit->id,
+                            ]);
+                        }
 
                         $lockedCredit->update(['remaining_amount' => 0]);
 
-                        $wallet->transactions()->create([
-                            'type'             => 'debit',
-                            'amount'           => $amountToExpire,
-                            'remaining_amount' => 0,
-                            'description'      => 'System Auto-Debit: Points Expired',
-                        ]);
+                        if ($amountToExpire > 0) {
+                            $wallet->transactions()->create([
+                                'type'             => 'debit',
+                                'amount'           => $amountToExpire,
+                                'remaining_amount' => 0,
+                                'description'      => 'System Auto-Debit: Points Expired',
+                            ]);
 
-                        $wallet->decrement('balance', $amountToExpire);
+                            $wallet->decrement('balance', $amountToExpire);
+                        }
 
                         $count++;
                         $totalExpired += $amountToExpire;

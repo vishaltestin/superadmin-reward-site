@@ -12,7 +12,9 @@ use App\Http\Controllers\Api\Admin\PaymentController;
 use App\Http\Controllers\Api\Admin\ReportController;
 use App\Http\Controllers\Api\Admin\SubAdminController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\RazorpayWebhookController;
 use App\Http\Controllers\Api\Storefront\ClaimController;
+use App\Http\Controllers\Api\Storefront\ExperienceEnquiryController;
 use App\Http\Controllers\Api\Storefront\PromotionController;
 use App\Http\Controllers\Api\Storefront\StorefrontAuthController;
 use App\Http\Controllers\Api\Storefront\StorefrontCatalogController;
@@ -21,10 +23,14 @@ use App\Http\Controllers\Api\Storefront\StorefrontConfigController;
 use App\Http\Controllers\Api\Storefront\StorefrontFilterController;
 use App\Http\Controllers\Api\Storefront\StorefrontUserController;
 use App\Http\Controllers\Api\Storefront\VoucherClaimController;
-use App\Http\Controllers\Api\Storefront\ExperienceEnquiryController;
 use App\Http\Controllers\Api\Website\DemoRequestController;
 use App\Http\Controllers\Api\Website\LeadController;
 use Illuminate\Support\Facades\Route;
+
+// Account-level Razorpay webhook (signature-verified, no auth).
+// Register this URL in the Razorpay dashboard for the
+// `payment.captured` and `payment.failed` events.
+Route::post('/webhooks/razorpay', [RazorpayWebhookController::class, 'handleWebhook']);
 
 Route::prefix('admin')->group(function () {
     Route::post('/auth/login', [AdminAuthController::class, 'login']);
@@ -47,8 +53,6 @@ Route::prefix('admin')->group(function () {
             Route::post('/', [CampaignController::class, 'store']);
 
             Route::post('/{id}/cancel', [CampaignController::class, 'cancel']);
-
-            Route::get('/{id}/export', [CampaignController::class, 'exportReport']);
         });
 
         Route::get('/verticals', function (Illuminate\Http\Request $request) {
@@ -127,12 +131,12 @@ Route::prefix('admin')->group(function () {
                 Route::post('/storefront-settings', [CompanyController::class, 'updateStorefrontSettings']);
                 Route::get('/catalog-config', [CompanyController::class, 'getCatalogConfig']);
                 Route::put('/catalog-visibility', [CompanyController::class, 'updateCatalogVisibility']);
+                Route::put('/category-preferences', [CompanyController::class, 'updateCategoryPreferences']);
             });
 
             Route::prefix('payment')->group(function () {
                 Route::get('/balance', [PaymentController::class, 'balance']);
                 Route::get('/transactions', [PaymentController::class, 'transactions']);
-                Route::post('/top-up/mock', [PaymentController::class, 'mockTopUp']);
                 Route::post('/razorpay/order', [PaymentController::class, 'createOrder']);
                 Route::post('/razorpay/verify', [PaymentController::class, 'verifyPayment']);
             });
@@ -146,8 +150,6 @@ Route::prefix('website')->group(function () {
 });
 
 Route::prefix('storefront')->group(function () {
-    Route::get('/promotions', [PromotionController::class, 'index']);
-
     Route::prefix('{slug}')->group(function () {
         Route::get('/init', [StorefrontConfigController::class, 'initializeStore']);
         Route::post('/auth/login', [StorefrontAuthController::class, 'login']);
@@ -157,6 +159,8 @@ Route::prefix('storefront')->group(function () {
         Route::get('/products', [StorefrontCatalogController::class, 'products']);
         Route::get('/products/{productSlug}', [StorefrontCatalogController::class, 'productDetail']);
         Route::middleware(['auth:sanctum', 'storefront.tenant'])->group(function () {
+            Route::get('/promotions', [PromotionController::class, 'index']);
+
             Route::post('/auth/logout', [StorefrontAuthController::class, 'logout']);
             Route::get('/user/me', [ProfileController::class, 'me']);
             Route::put('/user/profile', [ProfileController::class, 'update']);
@@ -190,6 +194,7 @@ Route::prefix('storefront')->group(function () {
                     Route::get('/catalog', [ClaimController::class, 'catalog']);
                     Route::get('/validate', [ClaimController::class, 'validateToken']);
                     Route::post('/execute', [ClaimController::class, 'executeClaim']);
+                    Route::post('/verify', [ClaimController::class, 'verifyPayment']);
                     Route::post('/validate-code', [ClaimController::class, 'validateCode']);
                 });
             });

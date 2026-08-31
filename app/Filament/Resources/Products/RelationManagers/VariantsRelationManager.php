@@ -1,8 +1,9 @@
 <?php
-
 namespace App\Filament\Resources\Products\RelationManagers;
 
 use App\Helpers\VariantAttributeHelper;
+use App\Models\ProductVariant;
+use Filament\Actions;
 use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Repeater;
@@ -12,7 +13,6 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
-use Filament\Actions;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -100,9 +100,9 @@ class VariantsRelationManager extends RelationManager
                             $component->state($rows);
                         }
                     })
-                    // The repeater's built-in dehydrated-state mutator would flatten the
-                    // rows with array_values(), so it is replaced with one that converts
-                    // the rows back into a normalized attributes map.
+                // The repeater's built-in dehydrated-state mutator would flatten the
+                // rows with array_values(), so it is replaced with one that converts
+                // the rows back into a normalized attributes map.
                     ->mutateDehydratedStateUsing(function (?array $state): array {
                         $attributes = [];
 
@@ -147,13 +147,13 @@ class VariantsRelationManager extends RelationManager
                             ->label('Value')
                             ->placeholder('e.g., XL')
                             ->required()
-                            ->visible(fn (Get $get): bool => ! VariantAttributeHelper::isColorKey($get('name'))),
+                            ->visible(fn(Get $get): bool => ! VariantAttributeHelper::isColorKey($get('name'))),
 
                         ColorPicker::make('color')
                             ->label('Color')
                             ->helperText('Pick a color from the panel, or type any custom value (hex, rgb or a name like "Navy Blue").')
                             ->required()
-                            ->visible(fn (Get $get): bool => VariantAttributeHelper::isColorKey($get('name'))),
+                            ->visible(fn(Get $get): bool => VariantAttributeHelper::isColorKey($get('name'))),
                     ])
                     ->columnSpanFull(),
             ]);
@@ -179,15 +179,24 @@ class VariantsRelationManager extends RelationManager
                     ->label('SKU')
                     ->searchable(),
 
+                // IMPORTANT: render via getStateUsing, NOT formatStateUsing.
+                // `attributes` is an array-cast JSON column, and Filament's
+                // TextColumn splits array state into its VALUES (keys are
+                // discarded) and calls formatStateUsing once per item — so a
+                // map like {"Color":"#000000","Size":"M"} rendered as "—, —".
+                // Computing a scalar string from the record sidesteps the
+                // split entirely.
                 TextColumn::make('attributes')
                     ->label('Attributes')
-                    ->formatStateUsing(function ($state): string {
-                        if (! is_array($state) || $state === []) {
+                    ->getStateUsing(function (ProductVariant $record): string {
+                        $map = $record->attributes;
+
+                        if (! is_array($map) || $map === []) {
                             return '—';
                         }
 
-                        return collect($state)
-                            ->map(fn ($value, $key) => "{$key}: {$value}")
+                        return collect($map)
+                            ->map(fn($value, $key) => "{$key}: {$value}")
                             ->implode(' • ');
                     })
                     ->wrap(),

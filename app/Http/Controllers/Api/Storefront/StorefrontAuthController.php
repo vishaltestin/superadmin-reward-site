@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers\Api\Storefront;
 
 use App\Http\Controllers\Controller;
@@ -16,23 +15,23 @@ class StorefrontAuthController extends Controller
     public function login(Request $request, $slug)
     {
         $request->validate([
-            'email' => 'required|email',
+            'email'    => 'required|email',
             'password' => 'required',
         ]);
 
         $company = Company::where('alias', $slug)->where('is_active', true)->first();
-        if (!$company) {
+        if (! $company) {
             return response()->json(['message' => 'Storefront not found.'], 404);
         }
 
-        $throttleKey = Str::transliterate(Str::lower($request->email).'|'.$request->ip());
+        $throttleKey = 'storefront:' . Str::transliterate(Str::lower($request->email) . '|' . $request->ip());
         if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
             return response()->json(['message' => 'Too many attempts. Try again later.'], 429);
         }
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             RateLimiter::hit($throttleKey);
             return response()->json(['message' => 'Invalid credentials.'], 401);
         }
@@ -43,27 +42,27 @@ class StorefrontAuthController extends Controller
         if ($user->company_id !== $company->id) {
             return response()->json(['message' => 'Access Denied: Tenant mismatch.'], 403);
         }
-        if (!$user->is_active) {
+        if (! $user->is_active) {
             return response()->json(['message' => 'Account Suspended.'], 403);
         }
 
         RateLimiter::clear($throttleKey);
 
         $user->load(['company', 'rewardeeProfile', 'wallet']);
-        
+
         $token = $user->createToken('storefront_token')->plainTextToken;
 
         return response()->json([
             'message' => 'Login successful',
-            'token' => $token,
-            'user' => new UserResource($user),
+            'token'   => $token,
+            'user'    => new UserResource($user),
         ]);
     }
 
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
-        
+
         return response()->json(['message' => 'Logged out successfully']);
     }
 }

@@ -1,27 +1,26 @@
 <?php
-
 namespace App\Http\Controllers\Api\Storefront;
 
+use App\Exceptions\PaymentException;
 use App\Http\Controllers\Controller;
 use App\Models\CampaignEntitlement;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Services\OrderFulfilmentService;
+use App\Services\PricingService;
+use App\Services\RazorpayPaymentService;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Razorpay\Api\Api as RazorpayApi;
 
 class StorefrontCheckoutController extends Controller
 {
-    private RazorpayApi $razorpay;
+    private RazorpayPaymentService $razorpay;
 
     public function __construct()
     {
-        $this->razorpay = new RazorpayApi(
-            config('services.razorpay.key_id'),
-            config('services.razorpay.key_secret')
-        );
+        $this->razorpay = app(RazorpayPaymentService::class);
     }
 
     public function checkout(Request $request, $slug)
@@ -41,51 +40,64 @@ class StorefrontCheckoutController extends Controller
             'billing_address'    => 'nullable|array',
         ]);
 
+        $allowedCategoryIds = $company->activeCategoryIds();
+        $hiddenCategoryIds  = $company->hidden_category_ids ?? [];
+        $hiddenProductIds   = $company->hidden_product_ids ?? [];
+
         try {
-            return DB::transaction(function () use ($validated, $user, $company, $multiplier) {
+            [$order, $pointsToBurn, $remainingFiatToPay] = DB::transaction(function () use ($validated, $user, $company, $multiplier, $allowedCategoryIds, $hiddenCategoryIds, $hiddenProductIds) {
 
                 $totalRupeeCost = 0;
                 $totalGstAmount = 0;
                 $orderItemsData = [];
 
-                // ─────────────────────────────────────────────────────────────
-                // 1. CALCULATE CART VALUE & INCLUSIVE TAXES
-                // ─────────────────────────────────────────────────────────────
                 foreach ($validated['items'] as $item) {
                     $product = Product::with([
-                        'tierPrices',
-                        'customCompanies' => fn ($q) => $q->where('company_id', $company->id),
-                    ])->where('is_active', true)->lockForUpdate()->findOrFail($item['product_id']);
+                        'customCompanies' => fn($q) => $q->where('company_id', $company->id),
+                    ])
+                        ->where('id', $item['product_id'])
+                        ->where('is_active', true)
+                        ->whereIn('category_id', $allowedCategoryIds)
+                        ->whereNotIn('category_id', $hiddenCategoryIds)
+                        ->whereNotIn('id', $hiddenProductIds)
+                        ->whereDoesntHave('customCompanies', function ($q) use ($company) {
+                            $q->where('company_id', $company->id)->where('is_excluded', true);
+                        })
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (! $product) {
+                        throw new Exception('One or more items in your cart are not available in this store.');
+                    }
 
                     $productPivot  = $product->customCompanies->first()?->pivot;
-                    $unitRupeePrice = $productPivot?->override_selling_price ?? $product->selling_price;
-                    $productName    = $productPivot?->override_name         ?? $product->name;
-                    $gstPercentage  = $product->gst_percentage               ?? 0.00;
+                    $productName   = $productPivot?->override_name ?? $product->name;
+                    $gstPercentage = $product->gst_percentage ?? 0.00;
+
+                    $variant = null;
 
                     if (! empty($item['variant_id'])) {
                         $variant = ProductVariant::with([
-                            'companyOverrides' => fn ($q) => $q->where('company_id', $company->id),
+                            'companyOverrides' => fn($q) => $q->where('company_id', $company->id),
                         ])->lockForUpdate()->findOrFail($item['variant_id']);
+
+                        if ((int) $variant->product_id !== (int) $product->id) {
+                            throw new Exception('Invalid product variant selected.');
+                        }
 
                         if ($variant->stock_quantity < $item['quantity']) {
                             throw new Exception("Stock exhausted for variant: {$variant->name}");
                         }
 
-                        $variantPivot   = $variant->companyOverrides->first()?->pivot;
-                        $unitRupeePrice = $variantPivot?->override_selling_price
-                            ?? $variant->selling_price
-                            ?? $unitRupeePrice;
-                        $productName    = $productName . ' - ' . $variant->name;
+                        $productName = $productName . ' - ' . $variant->name;
                     }
 
-                    $applicableTiers = $product->tierPrices
-                        ->where('min_quantity', '<=', $item['quantity'])
-                        ->filter(fn ($t) => is_null($t->product_variant_id) || $t->product_variant_id == $item['variant_id'])
-                        ->sortByDesc('min_quantity');
-
-                    if ($applicableTiers->isNotEmpty()) {
-                        $unitRupeePrice = $applicableTiers->first()->selling_price;
-                    }
+                    $unitRupeePrice = PricingService::unitPrice(
+                        $product,
+                        $variant,
+                        $company,
+                        (int) $item['quantity']
+                    );
 
                     $lineTotal     = $unitRupeePrice * $item['quantity'];
                     $lineGstAmount = $lineTotal - ($lineTotal / (1 + ($gstPercentage / 100)));
@@ -105,17 +117,15 @@ class StorefrontCheckoutController extends Controller
                     ];
                 }
 
-                // ─────────────────────────────────────────────────────────────
-                // 2. VALIDATE COUPON
-                // ─────────────────────────────────────────────────────────────
                 $couponDiscountFiat = 0;
                 $appliedEntitlement = null;
 
                 if (! empty($validated['applied_coupon'])) {
-                    $appliedEntitlement = CampaignEntitlement::where('claim_code', $validated['applied_coupon'])
+                    $appliedEntitlement = CampaignEntitlement::with('campaign')
+                        ->where('claim_code', $validated['applied_coupon'])
                         ->where('issued_to_user_id', $user->id)
                         ->where('is_claimed', false)
-                        ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                        ->where(fn($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
                         ->lockForUpdate()
                         ->first();
 
@@ -123,14 +133,22 @@ class StorefrontCheckoutController extends Controller
                         throw new Exception("Invalid, expired, or already claimed coupon code.");
                     }
 
+                    $couponConfig = $appliedEntitlement->campaign->config_json ?? [];
+
+                    if (! empty($couponConfig['catalog_selection']) && is_array($couponConfig['catalog_selection'])) {
+                        $cartProductIds    = array_column($validated['items'], 'product_id');
+                        $unauthorizedItems = array_diff($cartProductIds, $couponConfig['catalog_selection']);
+
+                        if (! empty($unauthorizedItems)) {
+                            throw new Exception('Your cart contains items that are not eligible for this promo code.');
+                        }
+                    }
+
                     $couponDiscountFiat = $appliedEntitlement->reward_value;
                 }
 
                 $totalAfterCoupon = max(0, $totalRupeeCost - $couponDiscountFiat);
 
-                // ─────────────────────────────────────────────────────────────
-                // 3. VALIDATE & ESCROW POINTS
-                // ─────────────────────────────────────────────────────────────
                 $pointsToBurn = $validated['points_to_burn'];
 
                 if ($user->wallet->balance < $pointsToBurn) {
@@ -153,10 +171,7 @@ class StorefrontCheckoutController extends Controller
                     );
                 }
 
-                // ─────────────────────────────────────────────────────────────
-                // 4. CREATE ORDER
-                // ─────────────────────────────────────────────────────────────
-                $initialStatus = $remainingFiatToPay <= 0 ? 'paid' : 'pending';
+                $initialStatus = 'pending';
 
                 $order = Order::create([
                     'company_id'               => $company->id,
@@ -168,84 +183,88 @@ class StorefrontCheckoutController extends Controller
                     'discount_amount'          => $couponDiscountFiat,
                     'fiat_paid'                => $remainingFiatToPay,
                     'status'                   => $initialStatus,
-                    'shipping_name'            => $validated['shipping_address']['name']   ?? null,
+                    'shipping_name'            => $validated['shipping_address']['name'] ?? null,
                     'shipping_mobile'          => $validated['shipping_address']['mobile'] ?? null,
-                    'shipping_address_line_1'  => $validated['shipping_address']['line1']  ?? null,
-                    'shipping_city'            => $validated['shipping_address']['city']   ?? null,
-                    'shipping_state'           => $validated['shipping_address']['state']  ?? null,
-                    'shipping_pincode'         => $validated['shipping_address']['pincode']?? null,
-                    'billing_address_snapshot' => $validated['billing_address']            ?? null,
+                    'shipping_address_line_1'  => $validated['shipping_address']['line1'] ?? null,
+                    'shipping_city'            => $validated['shipping_address']['city'] ?? null,
+                    'shipping_state'           => $validated['shipping_address']['state'] ?? null,
+                    'shipping_pincode'         => $validated['shipping_address']['pincode'] ?? null,
+                    'billing_address_snapshot' => $validated['billing_address'] ?? null,
                 ]);
 
                 foreach ($orderItemsData as $itemData) {
                     $order->items()->create($itemData);
                 }
 
-                // ─────────────────────────────────────────────────────────────
-                // 5. POST-ORDER ACTIONS
-                // ─────────────────────────────────────────────────────────────
-                $razorpayOrderId  = null;
-                $razorpayAmount   = null;
-
-                if ($remainingFiatToPay > 0) {
-                    // ── Create a real Razorpay order ──────────────────────────
-                    $amountInPaise = (int) round($remainingFiatToPay * 100);
-
-                    $rzpOrder = $this->razorpay->order->create([
-                        'amount'          => $amountInPaise,
-                        'currency'        => 'INR',
-                        'receipt'         => $order->order_number,
-                        'payment_capture' => 1,
-                    ]);
-
-                    $razorpayOrderId = $rzpOrder->id;
-                    $razorpayAmount  = $amountInPaise;
-
-                    $order->update(['payment_gateway_reference' => $razorpayOrderId]);
-
-                } else {
-                    // ── Free order: finalize immediately ──────────────────────
-                    if ($appliedEntitlement) {
-                        $appliedEntitlement->update(['is_claimed' => true, 'claimed_at' => now()]);
-                        $appliedEntitlement->campaign->decrement('budget_locked', $appliedEntitlement->reward_value);
-                    }
-
-                    foreach ($orderItemsData as $item) {
-                        if ($item['product_variant_id']) {
-                            ProductVariant::where('id', $item['product_variant_id'])
-                                ->decrement('stock_quantity', $item['quantity']);
-                        }
-                    }
+                if ($remainingFiatToPay <= 0) {
+                    OrderFulfilmentService::fulfilCartOrder($order);
                 }
 
-                return response()->json([
-                    'message'           => 'Checkout initialized.',
-                    'order_number'      => $order->order_number,
-                    'fiat_amount_due'   => $remainingFiatToPay,
-                    'points_burned'     => $pointsToBurn,
-                    'gateway_reference' => $razorpayOrderId,
-                    'status'            => $initialStatus,
-                    'razorpay_order_id' => $razorpayOrderId,
-                    'razorpay_amount'   => $razorpayAmount,
-                    'razorpay_currency' => 'INR',
-                    'razorpay_key_id'   => $remainingFiatToPay > 0 ? config('services.razorpay.key_id') : null,
-                    'company_name'      => $order->company->name ?? 'Store',
-                    'user_name'         => $order->user->name   ?? '',
-                    'user_email'        => $order->user->email  ?? '',
-                ], 201);
+                return [$order, $pointsToBurn, $remainingFiatToPay];
             });
 
         } catch (Exception $e) {
             return response()->json(['message' => 'Checkout failed.', 'error' => $e->getMessage()], 422);
         }
+
+        $razorpayOrderId = null;
+        $razorpayAmount  = null;
+
+        if ($remainingFiatToPay > 0) {
+            $amountInPaise = (int) round($remainingFiatToPay * 100);
+
+            try {
+                $payment = $this->razorpay->createOrderFor(
+                    $order,
+                    $amountInPaise,
+                    $order->order_number,
+                    ['kind' => 'cart']
+                );
+            } catch (PaymentException $e) {
+                DB::transaction(function () use ($order, $user) {
+                    if ($order->points_used > 0) {
+                        $user->wallet->credit(
+                            amount: $order->points_used,
+                            description: "Points refunded — payment gateway unavailable for order {$order->order_number}",
+                            fiatPaid: 0
+                        );
+                    }
+                    $order->update(['status' => 'cancelled']);
+                });
+
+                return response()->json([
+                    'message' => 'Payment gateway is unavailable. Please try again in a moment.',
+                    'error'   => $e->getMessage(),
+                ], 503);
+            }
+
+            $razorpayOrderId = $payment->provider_order_id;
+            $razorpayAmount  = $amountInPaise;
+
+            $order->update(['payment_gateway_reference' => $razorpayOrderId]);
+        }
+
+        return response()->json([
+            'message'           => 'Checkout initialized.',
+            'order_number'      => $order->order_number,
+            'fiat_amount_due'   => $remainingFiatToPay,
+            'points_burned'     => $pointsToBurn,
+            'gateway_reference' => $razorpayOrderId,
+            'status'            => $order->status,
+            'razorpay_order_id' => $razorpayOrderId,
+            'razorpay_amount'   => $razorpayAmount,
+            'razorpay_currency' => 'INR',
+            'razorpay_key_id'   => $remainingFiatToPay > 0 ? config('services.razorpay.key_id') : null,
+            'company_name'      => $order->company->name ?? 'Store',
+            'user_name'         => $order->user->name ?? '',
+            'user_email'        => $order->user->email ?? '',
+        ], 201);
     }
 
-    // =========================================================================
-    // Phase 2: Verify Razorpay Payment
-    // POST /{slug}/checkout/verify
-    // =========================================================================
     public function verifyPayment(Request $request, $slug)
     {
+        $user = $request->user();
+
         $validated = $request->validate([
             'order_number'        => 'required|exists:orders,order_number',
             'razorpay_order_id'   => 'required|string',
@@ -253,73 +272,53 @@ class StorefrontCheckoutController extends Controller
             'razorpay_signature'  => 'required|string',
         ]);
 
-        $expectedSignature = hash_hmac(
-            'sha256',
-            $validated['razorpay_order_id'] . '|' . $validated['razorpay_payment_id'],
-            config('services.razorpay.key_secret')
-        );
+        try {
+            [$payment] = $this->razorpay->verifyAndFetch(
+                $validated['razorpay_order_id'],
+                $validated['razorpay_payment_id'],
+                $validated['razorpay_signature']
+            );
 
-        if (! hash_equals($expectedSignature, $validated['razorpay_signature'])) {
+            $order = $payment->payable;
+
+            if (($payment->meta['kind'] ?? null) !== 'cart' || ! $order instanceof Order) {
+                return response()->json(['message' => 'This payment is not a checkout payment.'], 400);
+            }
+
+            if ($order->user_id !== $user->id || $order->order_number !== $validated['order_number']) {
+                return response()->json(['message' => 'This payment belongs to a different order.'], 403);
+            }
+
+            try {
+                $this->razorpay->fulfilOnce($payment, function () use ($payment, $order, $validated) {
+                    OrderFulfilmentService::fulfilCartOrder($order, $validated['razorpay_payment_id']);
+                });
+            } catch (PaymentException $e) {
+                $this->razorpay->refundCaptured($payment, 'cart_fulfilment_failed: ' . $e->getMessage());
+
+                if ($order->points_used > 0) {
+                    $user->wallet->credit(
+                        amount: $order->points_used,
+                        description: "Points refunded — order {$order->order_number} could not be fulfilled"
+                    );
+                }
+                $order->update(['status' => 'cancelled']);
+
+                return response()->json([
+                    'message'      => 'We could not complete your order (' . $e->getMessage() . ') Your payment is being refunded.',
+                    'order_number' => $order->order_number,
+                ], 409);
+            }
+
             return response()->json([
-                'message' => 'Payment verification failed. Signature mismatch.',
-            ], 400);
-        }
-
-        $order = Order::with('items')
-            ->where('order_number', $validated['order_number'])
-            ->where('user_id', $request->user()->id)
-            ->firstOrFail();
-
-        if ($order->status !== 'pending') {
-            return response()->json(['message' => 'Order is already processed.'], 400);
-        }
-
-        if ($order->payment_gateway_reference !== $validated['razorpay_order_id']) {
-            return response()->json([
-                'message' => 'Payment verification failed. Order ID mismatch.',
-            ], 400);
-        }
-
-        DB::transaction(function () use ($order, $validated) {
-            $order->update([
-                'status'                    => 'processing',
-                'payment_gateway_reference' => $validated['razorpay_payment_id'],
+                'message'      => 'Payment verified successfully.',
+                'order_number' => $order->order_number,
             ]);
-
-            if ($order->coupon_code) {
-                $entitlement = CampaignEntitlement::where('claim_code', $order->coupon_code)
-                    ->where('issued_to_user_id', $order->user_id)
-                    ->where('is_claimed', false)
-                    ->first();
-
-                if ($entitlement) {
-                    $entitlement->update(['is_claimed' => true, 'claimed_at' => now()]);
-                    $entitlement->campaign->decrement('budget_locked', $entitlement->reward_value);
-                }
-            }
-
-            foreach ($order->items as $item) {
-                if ($item->product_variant_id) {
-                    ProductVariant::where('id', $item->product_variant_id)
-                        ->decrement('stock_quantity', $item->quantity);
-                }
-            }
-        });
-
-        return response()->json([
-            'message'      => 'Payment verified successfully.',
-            'order_number' => $order->order_number,
-        ]);
+        } catch (PaymentException $e) {
+            return response()->json(['message' => $e->getMessage()], $e->status);
+        }
     }
 
-    // =========================================================================
-    // Phase 2 (alt): Cancel a pending order & refund escrowed points
-    // POST /{slug}/checkout/cancel
-    //
-    // Called when the user dismisses the Razorpay modal without paying.
-    // Releases the escrowed wallet points back to the user's balance and
-    // marks the order as cancelled so it doesn't linger as a ghost 'pending'.
-    // =========================================================================
     public function cancelOrder(Request $request, $slug)
     {
         $validated = $request->validate([
@@ -340,6 +339,10 @@ class StorefrontCheckoutController extends Controller
         }
 
         DB::transaction(function () use ($order, $request) {
+            $order->payments()
+                ->where('status', \App\Models\Payment::STATUS_CREATED)
+                ->update(['status' => \App\Models\Payment::STATUS_CANCELLED]);
+
             if ($order->points_used > 0) {
                 $request->user()->wallet->credit(
                     amount: $order->points_used,

@@ -28,3 +28,6 @@ Schedule::command('points:expire')->dailyAt('03:00')->withoutOverlapping();
 
 // 9:00 AM: Scan campaigns and send out scheduled reminder emails for unclaimed rewards
 Schedule::command('campaigns:send-reminders')->dailyAt('09:00')->withoutOverlapping();
+
+// Hourly: Cancel abandoned pending orders (>24h old, no captured payment) and refund escrowed points
+Schedule::command('orders:cancel-stale')->hourly()->withoutOverlapping();

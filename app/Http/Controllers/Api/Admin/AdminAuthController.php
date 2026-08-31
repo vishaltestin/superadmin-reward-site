@@ -17,7 +17,7 @@ class AdminAuthController extends Controller
             'password' => 'required',
         ]);
 
-        $throttleKey = Str::transliterate(Str::lower($request->email) . '|' . $request->ip());
+        $throttleKey = 'admin:' . Str::transliterate(Str::lower($request->email) . '|' . $request->ip());
         if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
             $seconds = RateLimiter::availableIn($throttleKey);
             return response()->json(['message' => "Too many attempts. Try again in {$seconds}s."], 429);

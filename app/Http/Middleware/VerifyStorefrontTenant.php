@@ -9,14 +9,13 @@ class VerifyStorefrontTenant
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $user      = $request->user();
-        $routeSlug = $request->route('slug');
+        $user = $request->user();
 
         if (! $user) {
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        if ($user->company->alias !== $routeSlug) {
+        if (! $user->company?->alias || $user->company->alias !== $request->route('slug')) {
             return response()->json([
                 'message' => 'Unauthorized: This storefront does not belong to your company.',
             ], 403);

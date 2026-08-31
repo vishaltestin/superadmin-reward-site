@@ -26,8 +26,9 @@ return [
         'key' => env('RESEND_API_KEY'),
     ],
     'razorpay' => [
-        'key_id'     => env('RAZORPAY_KEY_ID'),
-        'key_secret' => env('RAZORPAY_KEY_SECRET'),
+        'key_id'         => env('RAZORPAY_KEY_ID'),
+        'key_secret'     => env('RAZORPAY_KEY_SECRET'),
+        'webhook_secret' => env('RAZORPAY_WEBHOOK_SECRET'),
     ],
 
     'ses'      => [

@@ -3,6 +3,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CompanyResource;
+use App\Models\Company;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -42,9 +43,24 @@ class CompanyController extends Controller
             'points_name'  => 'nullable|string|max:50',
             'terms_text'   => 'nullable|string',
             'privacy_text' => 'nullable|string',
-            'social_links' => 'nullable|array',
+            'social_links' => 'nullable',
             'logo'         => 'nullable|image|max:2048',
         ]);
+
+        if ($request->exists('social_links')) {
+            $raw  = $request->input('social_links');
+            $data = is_string($raw) ? json_decode($raw, true) : $raw;
+
+            $validated['social_links'] = is_array($data)
+                ? array_values(array_filter(
+                array_map(fn($link) => [
+                    'platform' => $link['platform'] ?? null,
+                    'url'      => $link['url'] ?? null,
+                ], $data),
+                fn($link) => ! empty($link['platform']) && ! empty($link['url'])
+            ))
+                : [];
+        }
 
         if ($request->hasFile('logo')) {
             if ($company->logo) {
@@ -78,45 +94,63 @@ class CompanyController extends Controller
         ]);
     }
 
-    // public function getCatalogConfig(Request $request)
-    // {
-    //     $company = $request->user()->company;
+    public function updateCategoryPreferences(Request $request)
+    {
+        $company = $request->user()->company;
 
-    //     $categories = $company->categories()
-    //         ->where('is_active', true)
-    //         ->with(['primaryProducts' => function ($query) use ($company) {
-    //             $query->where('is_active', true)
-    //                 ->whereDoesntHave('customCompanies', function ($q) use ($company) {
-    //                     $q->where('company_id', $company->id)->where('is_excluded', true);
-    //                 })
-    //                 ->select('products.id', 'products.category_id', 'products.name', 'products.main_image', 'products.selling_price', 'products.mrp');
-    //         }])
-    //         ->with(['secondaryProducts' => function ($query) use ($company) {
-    //             $query->where('is_active', true)
-    //                 ->whereDoesntHave('customCompanies', function ($q) use ($company) {
-    //                     $q->where('company_id', $company->id)->where('is_excluded', true);
-    //                 })
-    //                 ->select('products.id', 'products.name', 'products.main_image', 'products.selling_price', 'products.mrp');
-    //         }])
-    //         ->select('categories.id', 'categories.name', 'categories.parent_id')
-    //         ->get();
+        $validated = $request->validate([
+            'order'                => ['nullable', 'array'],
+            'order.*'              => ['integer'],
+            'statuses'             => ['nullable', 'array'],
+            'statuses.*.id'        => ['required', 'integer'],
+            'statuses.*.is_active' => ['nullable', 'boolean'],
+        ]);
 
-    //     return response()->json([
-    //         'categories'          => $categories,
-    //         'hidden_category_ids' => $company->hidden_category_ids ?? [],
-    //         'hidden_product_ids'  => $company->hidden_product_ids ?? [],
-    //     ]);
-    // }
+        $assignedIds = $company->categories()->pluck('categories.id')->toArray();
+
+        if (! empty($validated['order'])) {
+            $order = array_values(array_values(array_unique($validated['order'])));
+            $order = array_intersect($order, $assignedIds);
+
+            foreach ($order as $index => $categoryId) {
+                $company->categories()->updateExistingPivot($categoryId, [
+                    'sort_order' => $index + 1,
+                ]);
+            }
+        }
+
+        if (! empty($validated['statuses'])) {
+            foreach ($validated['statuses'] as $status) {
+                if (! in_array($status['id'], $assignedIds)) {
+                    continue;
+                }
+
+                $company->categories()->updateExistingPivot($status['id'], [
+                    'is_active' => $status['is_active'] ?? null,
+                ]);
+            }
+        }
+
+        return response()->json(array_merge(
+            ['message' => 'Category preferences updated successfully.'],
+            $this->buildCatalogConfig($company)
+        ));
+    }
 
     public function getCatalogConfig(Request $request)
     {
-        $company    = $request->user()->company;
+        return response()->json(
+            $this->buildCatalogConfig($request->user()->company)
+        );
+    }
+
+    private function buildCatalogConfig(Company $company): array
+    {
         $multiplier = (float) ($company->point_multiplier ?? 1.00);
 
         $companyBulkTiers = \App\Models\CompanyProductTierPrice::where('company_id', $company->id)->get();
 
-        $categories = $company->categories()
-            ->where('categories.is_active', true)
+        $categories = $company->categoriesByDisplayOrder()
             ->with([
                 'primaryProducts'   => function ($query) use ($company) {
                     $query->where('products.is_active', true)
@@ -156,10 +190,13 @@ class CompanyController extends Controller
                 },
             ])
             ->select('categories.id', 'categories.name', 'categories.parent_id')
+            ->selectRaw('categories.is_active as global_is_active')
+            ->selectRaw('category_company.is_active as pivot_is_active')
+            ->selectRaw('category_company.sort_order as pivot_sort_order')
             ->get();
 
-        $transformedCategories = $categories->map(function ($category) use ($multiplier, $companyBulkTiers) {
-            $transformProduct = function ($product) use ($multiplier, $companyBulkTiers) {
+        $transformedCategories = $categories->map(function ($category) use ($multiplier, $company, $companyBulkTiers) {
+            $transformProduct = function ($product) use ($multiplier, $company, $companyBulkTiers) {
                 $productPivot = $product->customCompanies->first()?->pivot;
 
                 $finalName  = ($productPivot && ! empty($productPivot->override_name)) ? $productPivot->override_name : $product->name;
@@ -167,15 +204,11 @@ class CompanyController extends Controller
                 $finalPrice = ($productPivot && is_numeric($productPivot->override_selling_price)) ? $productPivot->override_selling_price : $product->selling_price;
                 $finalMrp   = ($productPivot && is_numeric($productPivot->override_mrp)) ? $productPivot->override_mrp : $product->mrp;
 
-                $productCompanyTiers = $companyBulkTiers->where('product_id', $product->id);
-                $baseCompanyTiers    = $productCompanyTiers->whereNull('product_variant_id');
-
-                $resolvedTiers = collect();
-                if ($baseCompanyTiers->isNotEmpty()) {
-                    $resolvedTiers = $resolvedTiers->concat($baseCompanyTiers);
-                } else {
-                    $resolvedTiers = $resolvedTiers->concat($product->tierPrices->whereNull('product_variant_id'));
-                }
+                $resolvedTiers = \App\Services\PricingService::resolveTiers(
+                    $product,
+                    $company,
+                    $companyBulkTiers
+                );
 
                 return [
                     'id'            => $product->id,
@@ -213,19 +246,26 @@ class CompanyController extends Controller
                 ];
             };
 
+            $pivotIsActive  = $category->pivot_is_active !== null ? (bool) $category->pivot_is_active : null;
+            $globalIsActive = (bool) $category->global_is_active;
+
             return [
                 'id'                 => $category->id,
                 'name'               => $category->name,
                 'parent_id'          => $category->parent_id,
+                'global_is_active'   => $globalIsActive,
+                'pivot_is_active'    => $pivotIsActive,
+                'is_active'          => $pivotIsActive ?? $globalIsActive,
+                'pivot_sort_order'   => $category->pivot_sort_order,
                 'primary_products'   => $category->primaryProducts->map($transformProduct),
                 'secondary_products' => $category->secondaryProducts->map($transformProduct),
             ];
         });
 
-        return response()->json([
+        return [
             'categories'          => $transformedCategories,
             'hidden_category_ids' => $company->hidden_category_ids ?? [],
             'hidden_product_ids'  => $company->hidden_product_ids ?? [],
-        ]);
+        ];
     }
 }

@@ -21,7 +21,7 @@ class StorefrontFilterController extends Controller
         $company    = $this->resolveTenant($slug);
         $multiplier = (float) ($company->point_multiplier ?? 1.00);
 
-        $allowedCategoryIds = $company->categories()->pluck('categories.id')->toArray();
+        $allowedCategoryIds = $company->activeCategoryIds();
         $hiddenCategoryIds  = $company->hidden_category_ids ?? [];
         $hiddenProductIds   = $company->hidden_product_ids ?? [];
 
@@ -41,12 +41,14 @@ class StorefrontFilterController extends Controller
         });
 
         if ($request->filled('q')) {
-            $queryText = $request->input('q');
-            $query->where(function ($sub) use ($queryText) {
-                $sub->where('products.name', 'LIKE', "%{$queryText}%")
-                    ->orWhere('products.short_description', 'LIKE', "%{$queryText}%")
-                    ->orWhere('products.tags', 'LIKE', "%{$queryText}%")
-                    ->orWhere('company_product.override_name', 'LIKE', "%{$queryText}%");
+            $queryText = (string) $request->input('q');
+            $escaped   = addcslashes($queryText, '%_\\\\');
+
+            $query->where(function ($sub) use ($escaped, $queryText) {
+                $sub->where('products.name', 'LIKE', "%{$escaped}%")
+                    ->orWhere('products.short_description', 'LIKE', "%{$escaped}%")
+                    ->orWhere('company_product.override_name', 'LIKE', "%{$escaped}%")
+                    ->orWhereJsonContains('products.tags', $queryText);
             });
         }
 
@@ -80,7 +82,9 @@ class StorefrontFilterController extends Controller
                 break;
         }
 
-        $query->with(['brand:id,name,logo', 'variants' => function ($q) {
+        $query->with(['brand:id,name,logo', 'customCompanies' => function ($q) use ($company) {
+            $q->where('company_id', $company->id);
+        }, 'variants' => function ($q) {
             $q->where('is_active', true);
         }]);
 
