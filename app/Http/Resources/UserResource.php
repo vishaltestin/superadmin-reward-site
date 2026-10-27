@@ -22,10 +22,13 @@ class UserResource extends JsonResource
             'last_name'               => $this->last_name,
             'email'                   => $this->email,
             'mobile'                  => $this->mobile,
+            'designation'             => $this->designation,
+            'department'              => $this->department,
             'user_type'               => $this->user_type,
             'is_active'               => $this->is_active,
             'wallet_balance'          => (float) ($this->wallet?->balance ?? 0.00),
 
+            // Kept in the API response for existing storefront consumers.
             'gender'                  => $this->gender,
             'dob'                     => $this->dob,
 

@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Filament\Resources\Leads\Pages;
 
 use App\Filament\Resources\Leads\LeadResource;
@@ -34,13 +33,13 @@ class EditLead extends EditRecord
 
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        $statusInDb   = $record->getRawOriginal('status'); 
-        $statusInForm = $data['status'];                  
+        $statusInDb   = $record->getRawOriginal('status');
+        $statusInForm = $data['status'];
 
         Log::info('[LeadOnboarding] handleRecordUpdate fired', [
-            'lead_id'       => $record->id,
-            'status_in_db'  => $statusInDb,
-            'status_in_form'=> $statusInForm,
+            'lead_id'        => $record->id,
+            'status_in_db'   => $statusInDb,
+            'status_in_form' => $statusInForm,
         ]);
 
         $record->update($data);
@@ -70,20 +69,19 @@ class EditLead extends EditRecord
             $tempPassword = Str::random(8);
 
             Log::info('[LeadOnboarding] Starting onboarding', [
-                'lead_id'       => $record->id,
-                'email'         => $record->email,
-                'company_name'  => $record->company_name,
-                'temp_password' => $tempPassword,
+                'lead_id'      => $record->id,
+                'email'        => $record->email,
+                'company_name' => $record->company_name,
             ]);
 
             DB::transaction(function () use ($record, $tempPassword) {
                 $company = Company::create([
                     'name'               => $record->company_name,
                     'alias'              => SlugHelper::generateUniqueSlug(
-                                               Company::class,
-                                               $record->company_name,
-                                               'alias'
-                                           ),
+                        Company::class,
+                        $record->company_name,
+                        'alias'
+                    ),
                     'number_of_employee' => $record->number_of_employee,
                     'is_approved'        => true,
                     'is_active'          => true,
@@ -97,21 +95,22 @@ class EditLead extends EditRecord
                 $company->wallet()->firstOrCreate([], ['balance' => 0.00]);
 
                 $user = User::create([
-                    'company_id' => $company->id,
-                    'name'       => trim($record->first_name . ' ' . $record->last_name),
-                    'first_name' => $record->first_name,
-                    'last_name'  => $record->last_name,
-                    'email'      => $record->email,
-                    'mobile'     => $record->mobile,
-                    'password'   => Hash::make($tempPassword),
-                    'user_type'  => 'business_head',
-                    'is_active'  => true,
+                    'company_id'  => $company->id,
+                    'name'        => trim($record->first_name . ' ' . $record->last_name),
+                    'first_name'  => $record->first_name,
+                    'last_name'   => $record->last_name,
+                    'email'       => $record->email,
+                    'mobile'      => $record->mobile,
+                    'designation' => $record->designation,
+                    'department'  => $record->department,
+                    'password'    => Hash::make($tempPassword),
+                    'user_type'   => 'business_head',
+                    'is_active'   => true,
                 ]);
 
                 Log::info('[LeadOnboarding] User created', [
-                    'user_id'       => $user->id,
-                    'email'         => $user->email,
-                    'temp_password' => $tempPassword, 
+                    'user_id' => $user->id,
+                    'email'   => $user->email,
                 ]);
 
                 $loginUrl = rtrim(config('app.admin_url'), '/') . '/login';
@@ -129,7 +128,6 @@ class EditLead extends EditRecord
                 ->body("Company created and welcome email sent to **{$record->email}**.")
                 ->persistent()
                 ->send();
-
         } catch (\Exception $e) {
             Log::error('[LeadOnboarding] Onboarding failed', [
                 'lead_id' => $record->id,

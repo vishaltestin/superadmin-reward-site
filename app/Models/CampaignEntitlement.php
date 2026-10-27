@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -10,17 +9,20 @@ class CampaignEntitlement extends Model
     protected $fillable = [
         'campaign_id', 'issued_to_user_id', 'reward_value',
         'claim_token', 'claim_code', 'is_claimed',
-        'claimed_at', 'expires_at', 'reminded_at'
+        'claimed_at', 'expires_at', 'reminded_at',
+        'initial_reminded_at', 'expiry_reminded_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'reward_value' => 'decimal:2',
-            'is_claimed' => 'boolean',
-            'claimed_at' => 'datetime',
-            'expires_at' => 'datetime',
-            'reminded_at' => 'datetime',
+            'reward_value'        => 'decimal:2',
+            'is_claimed'          => 'boolean',
+            'claimed_at'          => 'datetime',
+            'expires_at'          => 'datetime',
+            'reminded_at'         => 'datetime',
+            'initial_reminded_at' => 'datetime',
+            'expiry_reminded_at'  => 'datetime',
         ];
     }
 

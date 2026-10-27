@@ -80,36 +80,76 @@ class LandingPageController extends Controller
     {
         $user = $request->user();
 
-        $request->validate([
-            'event_id'    => 'required|exists:events,id',
+        $validated = $request->validate([
+            'event_id'    => 'nullable|integer|exists:events,id',
+            'vertical_id' => 'required_without:event_id|integer|exists:verticals,id',
             'tab'         => 'required|in:global,variations',
             'reward_type' => 'nullable|in:points,code,link',
         ]);
 
-        $event = \App\Models\Event::findOrFail($request->event_id);
+        $eventId = $validated['event_id'] ?? null;
+        if ($eventId !== null) {
+            $event      = \App\Models\Event::findOrFail($eventId);
+            $verticalId = (int) $event->vertical_id;
 
-        if (! in_array($event->vertical_id, $this->getAccessibleVerticalIds($user))) {
+            if (! empty($validated['vertical_id'])
+                && (int) $validated['vertical_id'] !== $verticalId) {
+                return response()->json(['message' => 'The event does not belong to the selected vertical.'], 422);
+            }
+        } else {
+            $verticalId = (int) $validated['vertical_id'];
+        }
+
+        if (! in_array($verticalId, $this->getAccessibleVerticalIds($user))) {
             return response()->json(['message' => 'Unauthorized vertical access.'], 403);
         }
 
-        $query = LandingPageTemplate::where('event_id', $request->event_id)
+        // A custom campaign event has no event_id. In that case, offer this
+        // tab's templates attached to active events in the selected vertical.
+        $eventIds = $eventId !== null
+            ? [$eventId]
+            : \App\Models\Event::where('vertical_id', $verticalId)
+            ->where('is_active', true)
+            ->pluck('id')
+            ->all();
+
+        $query = LandingPageTemplate::whereIn('event_id', $eventIds)
             ->where('is_active', true);
 
-        if ($request->tab === 'global') {
+        if ($validated['tab'] === 'global') {
             $query->whereNull('company_id');
         } else {
             $query->where('company_id', $user->company_id);
         }
 
-        $columns = ['id', 'name', 'title', 'thumbnail_path', 'status', 'updated_at'];
+        $rewardType = $validated['reward_type'] ?? null;
+        if ($rewardType !== null) {
+            // Null reward_type represents a legacy/general template. Explicitly
+            // typed templates are only offered for their matching reward type.
+            $query->where(function ($query) use ($rewardType) {
+                $query->whereNull('reward_type')
+                    ->orWhere('reward_type', $rewardType);
+            });
+        }
 
-        if ($request->reward_type === 'link') {
+        $columns = [
+            'id',
+            'event_id',
+            'name',
+            'title',
+            'thumbnail_path',
+            'status',
+            'updated_at',
+            'reward_type',
+        ];
+
+        if ($rewardType === 'link') {
             $columns[] = 'page_schema';
         }
 
         $templates = $query->latest()->get($columns);
 
-        if ($request->reward_type === 'link') {
+        if ($rewardType === 'link') {
             $templates = $templates
                 ->filter(fn(LandingPageTemplate $template) => $template->hasVisibleRewardSelector())
                 ->values();

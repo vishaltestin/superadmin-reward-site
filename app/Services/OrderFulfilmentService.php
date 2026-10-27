@@ -59,8 +59,9 @@ class OrderFulfilmentService
             if ($user) {
                 $user->wallet()->firstOrCreate([], ['balance' => 0]);
                 $user->wallet->credit(
-                    $leftover,
-                    'Leftover reward balance from campaign: ' . $entitlement->campaign->name
+                    amount: $leftover,
+                    description: 'Leftover reward balance from campaign: ' . $entitlement->campaign->name,
+                    reference: $entitlement
                 );
             }
         }

@@ -109,34 +109,67 @@ class EmailTemplateController extends Controller
         $user      = $request->user();
         $companyId = $user->company_id;
 
-        $request->validate([
-            'event_id'    => 'required|exists:events,id',
+        $validated = $request->validate([
+            'event_id'    => 'nullable|integer|exists:events,id',
+            'vertical_id' => 'required_without:event_id|integer|exists:verticals,id',
             'tab'         => 'required|in:global,variations',
             'reward_type' => 'nullable|in:points,code,link',
         ]);
 
-        $eventId = $request->event_id;
-        $tab     = $request->tab;
+        $eventId = $validated['event_id'] ?? null;
+        if ($eventId !== null) {
+            $event      = \App\Models\Event::findOrFail($eventId);
+            $verticalId = (int) $event->vertical_id;
 
-        $event = \App\Models\Event::findOrFail($eventId);
-        if (! in_array($event->vertical_id, $this->getAccessibleVerticalIds($user))) {
+            if (! empty($validated['vertical_id'])
+                && (int) $validated['vertical_id'] !== $verticalId) {
+                return response()->json(['message' => 'The event does not belong to the selected vertical.'], 422);
+            }
+        } else {
+            $verticalId = (int) $validated['vertical_id'];
+        }
+
+        if (! in_array($verticalId, $this->getAccessibleVerticalIds($user))) {
             return response()->json(['message' => 'Unauthorized vertical access.'], 403);
         }
 
-        $query = EmailTemplate::where('event_id', $eventId)
+        // Custom campaign events have no event_id. Use active events in the
+        // selected vertical as the general template pool for that campaign.
+        $eventIds = $eventId !== null
+            ? [$eventId]
+            : \App\Models\Event::where('vertical_id', $verticalId)
+            ->where('is_active', true)
+            ->pluck('id')
+            ->all();
+
+        $query = EmailTemplate::whereIn('event_id', $eventIds)
             ->where('is_active', true);
 
-        if ($tab === 'global') {
+        if ($validated['tab'] === 'global') {
             $query->whereNull('company_id');
         } else {
             $query->where('company_id', $companyId);
         }
 
-        if ($request->has('reward_type')) {
-            $query->where('reward_type', $request->reward_type);
+        $rewardType = $validated['reward_type'] ?? null;
+        if ($rewardType !== null) {
+            // Null reward_type denotes a general/legacy template. Templates
+            // with an explicit reward type must match the campaign's type.
+            $query->where(function ($query) use ($rewardType) {
+                $query->whereNull('reward_type')
+                    ->orWhere('reward_type', $rewardType);
+            });
         }
 
-        $templates = $query->latest()->get(['id', 'name', 'subject', 'thumbnail_path', 'updated_at', 'reward_type']);
+        $templates = $query->latest()->get([
+            'id',
+            'event_id',
+            'name',
+            'subject',
+            'thumbnail_path',
+            'updated_at',
+            'reward_type',
+        ]);
 
         return EmailTemplateResource::collection($templates);
     }

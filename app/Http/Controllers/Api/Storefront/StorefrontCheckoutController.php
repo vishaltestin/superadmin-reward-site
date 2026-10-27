@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Services\OrderFulfilmentService;
+use App\Services\OrderPointsRefundService;
 use App\Services\PricingService;
 use App\Services\RazorpayPaymentService;
 use Exception;
@@ -163,14 +164,6 @@ class StorefrontCheckoutController extends Controller
 
                 $remainingFiatToPay = $totalAfterCoupon - $pointsRupeeValue;
 
-                if ($pointsToBurn > 0) {
-                    $user->wallet->debit(
-                        amount: $pointsToBurn,
-                        description: "Points escrowed for Order checkout",
-                        fiatPaid: 0
-                    );
-                }
-
                 $initialStatus = 'pending';
 
                 $order = Order::create([
@@ -191,6 +184,15 @@ class StorefrontCheckoutController extends Controller
                     'shipping_pincode'         => $validated['shipping_address']['pincode'] ?? null,
                     'billing_address_snapshot' => $validated['billing_address'] ?? null,
                 ]);
+
+                if ($pointsToBurn > 0) {
+                    $user->wallet->debit(
+                        amount: $pointsToBurn,
+                        description: "Points escrowed for Order {$order->order_number}",
+                        reference: $order,
+                        fiatPaid: 0
+                    );
+                }
 
                 foreach ($orderItemsData as $itemData) {
                     $order->items()->create($itemData);
@@ -221,12 +223,11 @@ class StorefrontCheckoutController extends Controller
                     ['kind' => 'cart']
                 );
             } catch (PaymentException $e) {
-                DB::transaction(function () use ($order, $user) {
+                DB::transaction(function () use ($order) {
                     if ($order->points_used > 0) {
-                        $user->wallet->credit(
-                            amount: $order->points_used,
-                            description: "Points refunded — payment gateway unavailable for order {$order->order_number}",
-                            fiatPaid: 0
+                        app(OrderPointsRefundService::class)->refund(
+                            $order,
+                            "Points refunded — payment gateway unavailable for order {$order->order_number}"
                         );
                     }
                     $order->update(['status' => 'cancelled']);
@@ -296,13 +297,15 @@ class StorefrontCheckoutController extends Controller
             } catch (PaymentException $e) {
                 $this->razorpay->refundCaptured($payment, 'cart_fulfilment_failed: ' . $e->getMessage());
 
-                if ($order->points_used > 0) {
-                    $user->wallet->credit(
-                        amount: $order->points_used,
-                        description: "Points refunded — order {$order->order_number} could not be fulfilled"
-                    );
-                }
-                $order->update(['status' => 'cancelled']);
+                DB::transaction(function () use ($order) {
+                    if ($order->points_used > 0) {
+                        app(OrderPointsRefundService::class)->refund(
+                            $order,
+                            "Points refunded — order {$order->order_number} could not be fulfilled"
+                        );
+                    }
+                    $order->update(['status' => 'cancelled']);
+                });
 
                 return response()->json([
                     'message'      => 'We could not complete your order (' . $e->getMessage() . ') Your payment is being refunded.',
@@ -338,22 +341,24 @@ class StorefrontCheckoutController extends Controller
             ], 409);
         }
 
-        DB::transaction(function () use ($order, $request) {
-            $order->payments()
+        DB::transaction(function () use ($order) {
+            $lockedOrder = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            if ($lockedOrder->status !== 'pending') {
+                abort(409, 'Order cannot be cancelled.');
+            }
+
+            $lockedOrder->payments()
                 ->where('status', \App\Models\Payment::STATUS_CREATED)
                 ->update(['status' => \App\Models\Payment::STATUS_CANCELLED]);
 
-            if ($order->points_used > 0) {
-                $request->user()->wallet->credit(
-                    amount: $order->points_used,
-                    description: "Points refunded — Order {$order->order_number} cancelled",
-                    reference: null,
-                    expiresAt: null,
-                    fiatPaid: 0
+            if ($lockedOrder->points_used > 0) {
+                app(OrderPointsRefundService::class)->refund(
+                    $lockedOrder,
+                    "Points refunded — Order {$lockedOrder->order_number} cancelled"
                 );
             }
 
-            $order->update([
+            $lockedOrder->update([
                 'status'                    => 'cancelled',
                 'payment_gateway_reference' => null,
             ]);

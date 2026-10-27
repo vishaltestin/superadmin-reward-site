@@ -3,11 +3,17 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 
 class CompanyResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $user                = $request->user();
+        $canViewTaxDocuments = $user
+        && $user->user_type === 'business_head'
+        && (int) $user->company_id === (int) $this->id;
+
         return [
             'id'                  => $this->id,
             'name'                => $this->name,
@@ -17,6 +23,18 @@ class CompanyResource extends JsonResource
             'number_of_employee'  => $this->number_of_employee,
             'gst_no'              => $this->gst_no,
             'pan_no'              => $this->pan_no,
+            'gst_document_url'    => $canViewTaxDocuments && $this->gst_document_path
+                ? Storage::disk('local')->temporaryUrl(
+                $this->gst_document_path,
+                now()->addMinutes(30),
+            )
+                : null,
+            'pan_document_url'    => $canViewTaxDocuments && $this->pan_document_path
+                ? Storage::disk('local')->temporaryUrl(
+                $this->pan_document_path,
+                now()->addMinutes(30),
+            )
+                : null,
             'address'             => $this->address,
             'points_name'         => $this->points_name,
             'wallet_balance'      => (float) ($this->wallet?->balance ?? 0.00),

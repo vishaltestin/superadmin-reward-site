@@ -16,11 +16,15 @@ class LandingPageTemplateResource extends JsonResource
             'thumbnail_path'      => $this->getThumbnailUrl($this->thumbnail_path),
             'status'              => $this->status,
             'updated_at'          => $this->updated_at,
+            'reward_type'         => $this->reward_type,
 
             'global_theme_tokens' => $this->whenHas('global_theme_tokens'),
             'seo_meta'            => $this->whenHas('seo_meta'),
             'page_schema'         => $this->whenHas('page_schema'),
-            'available_variables' => $this->when(isset($this->available_variables), $this->available_variables),
+            'available_variables' => $this->when(
+                isset($this->available_variables),
+                $this->available_variables
+            ),
         ];
     }
 

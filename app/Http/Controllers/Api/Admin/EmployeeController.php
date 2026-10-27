@@ -22,7 +22,10 @@ class EmployeeController extends Controller
         $vertical = Vertical::where('slug', $verticalSlug)->firstOrFail();
 
         if ($user->user_type === 'sub_admin') {
-            $hasAccess = $user->managedVerticals()->where('vertical_id', $vertical->id)->exists();
+            $hasAccess = $user->managedVerticals()
+                ->where('vertical_id', $vertical->id)
+                ->exists();
+
             if (! $hasAccess) {
                 throw new AccessDeniedHttpException('You do not have permission to manage this vertical.');
             }
@@ -38,27 +41,29 @@ class EmployeeController extends Controller
 
         $this->authorizeVerticalAccess($user, $verticalSlug);
 
-        $searchTerm = $request->query('search', '');
+        $searchTerm = trim((string) $request->query('search', ''));
 
+        // Promoted employees remain associated with their original vertical
+        // through rewardeeProfile, even after their user_type becomes sub_admin.
         $query = User::where('company_id', $user->company_id)
-            ->where('user_type', 'rewardee')
-            ->whereHas('rewardeeProfile.vertical', function ($q) use ($verticalSlug) {
-                $q->where('slug', $verticalSlug);
+            ->whereIn('user_type', ['rewardee', 'sub_admin'])
+            ->whereHas('rewardeeProfile.vertical', function ($query) use ($verticalSlug) {
+                $query->where('slug', $verticalSlug);
             })
             ->with('rewardeeProfile');
 
-        if (! empty($searchTerm)) {
-            $query->where(function ($q) use ($searchTerm) {
-                $q->where('first_name', 'LIKE', "%{$searchTerm}%")
+        if ($searchTerm !== '') {
+            $query->where(function ($query) use ($searchTerm) {
+                $query->where('first_name', 'LIKE', "%{$searchTerm}%")
                     ->orWhere('last_name', 'LIKE', "%{$searchTerm}%")
                     ->orWhere('email', 'LIKE', "%{$searchTerm}%")
                     ->orWhere('mobile', 'LIKE', "%{$searchTerm}%");
             });
         }
 
-        $employees = $query->orderBy('created_at', 'desc')->paginate(10);
-
-        return response()->json($employees);
+        return response()->json(
+            $query->orderBy('created_at', 'desc')->paginate(10)
+        );
     }
 
     public function store(Request $request)
@@ -74,8 +79,7 @@ class EmployeeController extends Controller
             'custom_data'   => 'nullable|array',
         ]);
 
-        $vertical = $this->authorizeVerticalAccess($admin, $validated['vertical_slug']);
-
+        $vertical    = $this->authorizeVerticalAccess($admin, $validated['vertical_slug']);
         $rawPassword = Str::random(10);
 
         $user = DB::transaction(function () use ($validated, $admin, $vertical, $rawPassword) {
@@ -103,10 +107,12 @@ class EmployeeController extends Controller
             return $newUser;
         });
 
-        $companySlug = $admin->company->alias ?? Str::slug($admin->company->name);
-
+        $companySlug   = $admin->company->alias ?? Str::slug($admin->company->name);
         $storefrontUrl = rtrim(config('app.storefront_url'), '/') . "/marketplace/{$companySlug}";
-        Mail::to($user->email)->send(new WelcomeEmployeeMail($user, $rawPassword, $storefrontUrl));
+
+        Mail::to($user->email)->send(
+            new WelcomeEmployeeMail($user, $rawPassword, $storefrontUrl)
+        );
 
         return response()->json([
             'message' => 'Recipient added successfully and welcome email dispatched.',
@@ -119,13 +125,13 @@ class EmployeeController extends Controller
         $admin = $request->user();
 
         $targetUser = User::where('company_id', $admin->company_id)
-            ->where('user_type', 'rewardee')
+            ->whereIn('user_type', ['rewardee', 'sub_admin'])
+            ->whereHas('rewardeeProfile.vertical')
             ->with('rewardeeProfile.vertical')
             ->findOrFail($id);
 
-        $currentVerticalSlug = $targetUser->rewardeeProfile->vertical->slug;
-
-        $this->authorizeVerticalAccess($admin, $currentVerticalSlug);
+        $verticalSlug = $targetUser->rewardeeProfile->vertical->slug;
+        $this->authorizeVerticalAccess($admin, $verticalSlug);
 
         $validated = $request->validate([
             'first_name'  => 'required|string|max:255',
@@ -139,14 +145,15 @@ class EmployeeController extends Controller
             $targetUser->update([
                 'first_name' => $validated['first_name'],
                 'last_name'  => $validated['last_name'],
+                'name'       => trim($validated['first_name'] . ' ' . $validated['last_name']),
                 'email'      => $validated['email'],
                 'mobile'     => $validated['mobile'],
             ]);
 
-            if (isset($validated['custom_data'])) {
+            if (array_key_exists('custom_data', $validated)) {
                 $existingData = $targetUser->rewardeeProfile->vertical_data ?? [];
                 $targetUser->rewardeeProfile->update([
-                    'vertical_data' => array_merge($existingData, $validated['custom_data']),
+                    'vertical_data' => array_merge($existingData, $validated['custom_data'] ?? []),
                 ]);
             }
         });
@@ -166,65 +173,151 @@ class EmployeeController extends Controller
         ]);
 
         $vertical = $this->authorizeVerticalAccess($admin, $request->vertical_slug);
+        $handle   = fopen($request->file('file')->getRealPath(), 'r');
 
-        $file = $request->file('file');
+        if ($handle === false) {
+            return response()->json(['message' => 'Unable to read the CSV file.'], 400);
+        }
 
-        $handle = fopen($file->getRealPath(), 'r');
         $header = fgetcsv($handle);
 
         if (! $header) {
-            return response()->json(['message' => 'Invalid or empty CSV file.'], 400);
+            fclose($handle);
+
+            return response()->json([
+                'message' => 'Invalid or empty CSV file.',
+                'errors'  => ['The uploaded CSV does not contain a header row.'],
+            ], 400);
+        }
+
+        $header = array_map(function ($column) {
+            $column = preg_replace('/^\xEF\xBB\xBF/', '', (string) $column);
+            return trim($column);
+        }, $header);
+
+        if (count($header) !== count(array_unique($header))) {
+            fclose($handle);
+
+            return response()->json([
+                'message' => 'The CSV contains duplicate column names.',
+                'errors'  => ['Please download a fresh template and do not duplicate header columns.'],
+            ], 422);
+        }
+
+        $requiredHeaders = ['first_name', 'last_name', 'email'];
+        $missingHeaders  = array_values(array_diff($requiredHeaders, $header));
+
+        if ($missingHeaders !== []) {
+            fclose($handle);
+
+            return response()->json([
+                'message' => 'The CSV is missing required columns.',
+                'errors'  => ['Missing required header(s): ' . implode(', ', $missingHeaders) . '.'],
+            ], 422);
         }
 
         $coreColumns  = ['first_name', 'last_name', 'email', 'mobile'];
         $successCount = 0;
         $errors       = [];
         $rowNumber    = 1;
-
         $usersToEmail = [];
 
         $companySlug   = $admin->company->alias ?? Str::slug($admin->company->name);
         $storefrontUrl = rtrim(config('app.storefront_url'), '/') . "/marketplace/{$companySlug}";
 
         DB::beginTransaction();
+
         try {
             while (($row = fgetcsv($handle)) !== false) {
                 $rowNumber++;
 
-                if (array_filter($row) === []) {
+                $row = array_map(
+                    static fn($value) => trim((string) ($value ?? '')),
+                    $row,
+                );
+
+                if (count(array_filter($row, static fn($value) => $value !== '')) === 0) {
+                    continue;
+                }
+
+                if (count($row) !== count($header)) {
+                    $errors[] = "Row {$rowNumber}: Expected " . count($header)
+                    . ' columns but found ' . count($row) . '.';
                     continue;
                 }
 
                 $rowData = array_combine($header, $row);
 
-                if (empty($rowData['first_name']) || empty($rowData['last_name']) || empty($rowData['email'])) {
+                if ($rowData === false) {
+                    $errors[] = "Row {$rowNumber}: Could not read the row. Check the CSV columns.";
+                    continue;
+                }
+
+                $firstName = trim((string) ($rowData['first_name'] ?? ''));
+                $lastName  = trim((string) ($rowData['last_name'] ?? ''));
+                $email     = trim((string) ($rowData['email'] ?? ''));
+
+                if ($firstName === '' || $lastName === '' || $email === '') {
                     $errors[] = "Row {$rowNumber}: Missing first name, last name, or email.";
                     continue;
                 }
 
-                if (User::where('email', $rowData['email'])->exists()) {
-                    $errors[] = "Row {$rowNumber}: Email '{$rowData['email']}' already exists.";
+                if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $errors[] = "Row {$rowNumber}: '{$email}' is not a valid email address.";
                     continue;
                 }
 
-                $customData = [];
+                if (User::where('email', $email)->exists()) {
+                    $errors[] = "Row {$rowNumber}: Email '{$email}' already exists.";
+                    continue;
+                }
+
+                $customData        = [];
+                $rowHasInvalidDate = false;
+
                 foreach ($rowData as $column => $value) {
-                    if (! in_array($column, $coreColumns)) {
-                        $customData[$column] = $value;
+                    if (in_array($column, $coreColumns, true)) {
+                        continue;
                     }
+
+                    $value        = trim((string) ($value ?? ''));
+                    $isDateColumn = preg_match('/date|_day$/i', $column) === 1;
+
+                    if ($isDateColumn) {
+                        if ($value === '') {
+                            $customData[$column] = null;
+                            continue;
+                        }
+
+                        $normalizedDate = $this->normalizeCsvDate($value);
+
+                        if ($normalizedDate === null) {
+                            $errors[]          = "Row {$rowNumber}: Invalid date '{$value}' in '{$column}'. Use YYYY-MM-DD or DD/MM/YYYY.";
+                            $rowHasInvalidDate = true;
+                            continue;
+                        }
+
+                        $customData[$column] = $normalizedDate;
+                        continue;
+                    }
+
+                    $customData[$column] = $value;
+                }
+
+                if ($rowHasInvalidDate) {
+                    continue;
                 }
 
                 $rawPassword = Str::random(10);
-
-                $newUser = new User();
+                $newUser     = new User();
                 $newUser->fill([
                     'company_id' => $admin->company_id,
                     'user_type'  => 'rewardee',
-                    'first_name' => $rowData['first_name'],
-                    'name'       => trim($rowData['first_name'] . ' ' . $rowData['last_name']),
-                    'last_name'  => $rowData['last_name'],
-                    'email'      => $rowData['email'],
-                    'mobile'     => $rowData['mobile'] ?? null,
+                    'first_name' => $firstName,
+                    'name'       => trim($firstName . ' ' . $lastName),
+                    'last_name'  => $lastName,
+                    'email'      => $email,
+                    'mobile'     => ($rowData['mobile'] ?? '') !== '' ? $rowData['mobile'] : null,
                     'password'   => Hash::make($rawPassword),
                     'is_active'  => true,
                 ]);
@@ -247,8 +340,9 @@ class EmployeeController extends Controller
 
             fclose($handle);
 
-            if (count($errors) > 0) {
+            if ($errors !== []) {
                 DB::rollBack();
+
                 return response()->json([
                     'message' => 'Upload failed due to data errors.',
                     'errors'  => array_slice($errors, 0, 10),
@@ -266,14 +360,82 @@ class EmployeeController extends Controller
             return response()->json([
                 'message' => "Successfully imported {$successCount} recipients and dispatched welcome emails.",
             ]);
-
-        } catch (\Exception $e) {
+        } catch (\Throwable $exception) {
             DB::rollBack();
+
             if (is_resource($handle)) {
                 fclose($handle);
             }
-            return response()->json(['message' => 'A server error occurred during import.'], 500);
+
+            report($exception);
+
+            return response()->json([
+                'message' => 'A server error occurred during import.',
+            ], 500);
         }
+    }
+
+    /**
+     * Convert supported CSV date formats to an unambiguous YYYY-MM-DD value.
+     * Excel serial dates are accepted as well. Ambiguous slash dates use the
+     * Indian DD/MM/YYYY convention unless that interpretation is impossible.
+     */
+    private function normalizeCsvDate(string $value): ?string
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}[T ]/', $value) === 1) {
+            $value = substr($value, 0, 10);
+        }
+
+        if (preg_match('/^\d{5,6}(?:\.\d+)?$/', $value) === 1) {
+            $serial = (int) floor((float) $value);
+
+            if ($serial >= 15000 && $serial <= 100000) {
+                return (new \DateTimeImmutable('1899-12-30'))
+                    ->modify("+{$serial} days")
+                    ->format('Y-m-d');
+            }
+        }
+
+        $formats = [
+            'Y-m-d',
+            'Y/m/d',
+            'd/m/Y',
+            'd-m-Y',
+            'd.m.Y',
+            'd/m/y',
+            'd-m-y',
+            'd.m.y',
+            'd-M-Y',
+            'j-M-Y',
+            'd M Y',
+            'j M Y',
+            'M d, Y',
+            'M j, Y',
+            'm/d/Y',
+            'm-d-Y',
+            'm.d.Y',
+        ];
+
+        foreach ($formats as $format) {
+            $date        = \DateTimeImmutable::createFromFormat('!' . $format, $value);
+            $parseErrors = \DateTimeImmutable::getLastErrors();
+
+            if (
+                $date !== false
+                && ($parseErrors === false
+                    || ($parseErrors['warning_count'] === 0 && $parseErrors['error_count'] === 0))
+            ) {
+                return $date->format('Y-m-d');
+            }
+        }
+
+        return null;
     }
 
     public function promoteToAdmin(Request $request, $id)
@@ -314,7 +476,9 @@ class EmployeeController extends Controller
             new AdminAccessMail($employee, $rawPassword, $adminLoginUrl, $adminLoginUrl)
         );
 
-        return response()->json(['message' => 'Employee successfully promoted to Sub-Admin and notified via email.']);
+        return response()->json([
+            'message' => 'Employee successfully promoted to Sub-Admin and notified via email.',
+        ]);
     }
 
     public function destroy(Request $request, $id)
@@ -327,12 +491,15 @@ class EmployeeController extends Controller
             ->findOrFail($id);
 
         if ($targetUser->rewardeeProfile && $targetUser->rewardeeProfile->vertical) {
-            $currentVerticalSlug = $targetUser->rewardeeProfile->vertical->slug;
-            $this->authorizeVerticalAccess($admin, $currentVerticalSlug);
+            $this->authorizeVerticalAccess(
+                $admin,
+                $targetUser->rewardeeProfile->vertical->slug,
+            );
         }
 
         $hasOrders        = $targetUser->orders()->exists();
-        $hasWalletHistory = $targetUser->wallet && $targetUser->wallet->transactions()->exists();
+        $hasWalletHistory = $targetUser->wallet
+        && $targetUser->wallet->transactions()->exists();
 
         if ($hasOrders || $hasWalletHistory) {
             $targetUser->update(['is_active' => false]);
@@ -344,7 +511,6 @@ class EmployeeController extends Controller
 
         DB::transaction(function () use ($targetUser) {
             $targetUser->wallet?->delete();
-
             $targetUser->delete();
         });
 

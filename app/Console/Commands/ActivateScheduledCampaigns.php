@@ -37,7 +37,8 @@ class ActivateScheduledCampaigns extends Command
                             $wallet = $user->wallet()->firstOrCreate([], ['balance' => 0.00]);
                             $wallet->credit(
                                 amount: $entitlement->reward_value,
-                                description: "Reward from Scheduled Campaign: {$campaign->name}"
+                                description: "Reward from Scheduled Campaign: {$campaign->name}",
+                                reference: $entitlement
                             );
 
                             $entitlement->update([

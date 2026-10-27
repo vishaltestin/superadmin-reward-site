@@ -3,6 +3,7 @@ namespace App\Console\Commands;
 
 use App\Models\Order;
 use App\Models\Payment;
+use App\Services\OrderPointsRefundService;
 use Exception;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +22,6 @@ class CancelStalePendingOrders extends Command
         $staleOrders = Order::where('status', 'pending')
             ->where('created_at', '<', $cutoff)
             ->whereDoesntHave('payments', fn($q) => $q->where('status', Payment::STATUS_PAID))
-            ->with('user.wallet')
             ->get();
 
         if ($staleOrders->isEmpty()) {
@@ -54,13 +54,11 @@ class CancelStalePendingOrders extends Command
                         ->where('status', Payment::STATUS_CREATED)
                         ->update(['status' => Payment::STATUS_CANCELLED]);
 
-                    if ($order->points_used > 0 && $order->user?->wallet) {
-                        $order->user->wallet->credit(
-                            amount: $order->points_used,
-                            description: "Points refunded — abandoned order {$order->order_number} cancelled",
-                            fiatPaid: 0
+                    if ($order->points_used > 0) {
+                        $refunded += app(OrderPointsRefundService::class)->refund(
+                            $order,
+                            "Points refunded — abandoned order {$order->order_number} cancelled"
                         );
-                        $refunded += $order->points_used;
                     }
 
                     $order->update([

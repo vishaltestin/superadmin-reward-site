@@ -15,6 +15,10 @@ class DemoRequest extends Model
         'email',
         'company_name',
         'mobile',
+        'department',
+        'designation',
+        'number_of_employee',
+        'how_did_you_hear_about_us',
         'message',
         'status',
     ];

@@ -12,7 +12,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'company_id', 'user_type', 'first_name', 'last_name', 'mobile', 'gender', 'dob', 'is_active'])]
+#[Fillable(['name', 'email', 'password', 'company_id', 'user_type', 'first_name', 'last_name', 'mobile', 'designation', 'department', 'gender', 'dob', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements FilamentUser
 {
@@ -82,6 +82,7 @@ class User extends Authenticatable implements FilamentUser
     {
         return $this->hasMany(UserAddress::class);
     }
+
     /**
      * Get all campaign entitlements issued to this user.
      */
@@ -89,10 +90,12 @@ class User extends Authenticatable implements FilamentUser
     {
         return $this->hasMany(CampaignEntitlement::class, 'issued_to_user_id');
     }
+
     public function voucherClaims()
     {
         return $this->hasMany(VoucherClaim::class);
     }
+
     public function experienceEnquiries()
     {
         return $this->hasMany(ExperienceEnquiry::class);

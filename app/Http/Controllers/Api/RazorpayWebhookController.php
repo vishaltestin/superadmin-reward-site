@@ -4,11 +4,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Payment;
-use App\Models\Wallet;
 use App\Models\WebhookEvent;
 use App\Services\OrderFulfilmentService;
+use App\Services\OrderPointsRefundService;
 use App\Services\RazorpayPaymentService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -157,14 +158,21 @@ class RazorpayWebhookController extends Controller
             $service->refundCaptured($payment, 'webhook_fulfilment_failed: ' . $e->getMessage());
 
             $order = $payment->fresh()->payable;
-            if ($order instanceof Order && $order->status === 'pending') {
-                if ($order->points_used > 0) {
-                    $order->user->wallet->credit(
-                        amount: $order->points_used,
-                        description: "Points refunded — order {$order->order_number} could not be fulfilled"
-                    );
-                }
-                $order->update(['status' => 'cancelled']);
+            if ($order instanceof Order) {
+                DB::transaction(function () use ($order) {
+                    $lockedOrder = Order::whereKey($order->id)->lockForUpdate()->first();
+                    if (! $lockedOrder || $lockedOrder->status !== 'pending') {
+                        return;
+                    }
+
+                    if ($lockedOrder->points_used > 0) {
+                        app(OrderPointsRefundService::class)->refund(
+                            $lockedOrder,
+                            "Points refunded — order {$lockedOrder->order_number} could not be fulfilled"
+                        );
+                    }
+                    $lockedOrder->update(['status' => 'cancelled']);
+                });
             }
         }
     }
@@ -181,19 +189,35 @@ class RazorpayWebhookController extends Controller
             return;
         }
 
-        $payment->provider_payment_id = $entity['id'];
-        $service->markFailed($payment, (string) ($entity['error_description'] ?? 'payment failed'));
+        DB::transaction(function () use ($payment, $entity, $service) {
+            $lockedPayment = Payment::whereKey($payment->id)->lockForUpdate()->first();
+            if (! $lockedPayment || $lockedPayment->status !== Payment::STATUS_CREATED) {
+                return;
+            }
 
-        $order = $payment->payable;
+            $lockedPayment->provider_payment_id = $entity['id'];
+            $service->markFailed(
+                $lockedPayment,
+                (string) ($entity['error_description'] ?? 'payment failed')
+            );
 
-        if ($order instanceof Order && $order->status === 'pending') {
-            if ($order->points_used > 0) {
-                $order->user->wallet->credit(
-                    amount: $order->points_used,
-                    description: "Points refunded — payment failed for order {$order->order_number}"
+            $order = $lockedPayment->payable;
+            if (! $order instanceof Order) {
+                return;
+            }
+
+            $lockedOrder = Order::whereKey($order->id)->lockForUpdate()->first();
+            if (! $lockedOrder || $lockedOrder->status !== 'pending') {
+                return;
+            }
+
+            if ($lockedOrder->points_used > 0) {
+                app(OrderPointsRefundService::class)->refund(
+                    $lockedOrder,
+                    "Points refunded — payment failed for order {$lockedOrder->order_number}"
                 );
             }
-            $order->update(['status' => 'failed']);
-        }
+            $lockedOrder->update(['status' => 'failed']);
+        });
     }
 }

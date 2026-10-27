@@ -11,27 +11,82 @@ class CompanyController extends Controller
 {
     public function updateBusinessDetails(Request $request)
     {
-        $validated = $request->validate([
-            'gst_no'             => 'nullable|string|max:50',
-            'pan_no'             => 'nullable|string|max:50',
-            'industry'           => 'nullable|string|max:255',
-            'address'            => 'nullable|string',
-            'number_of_employee' => 'nullable|string',
-        ]);
-
         $company = $request->user()->company;
 
-        if ($request->filled('gst_no') || $request->filled('pan_no')) {
-            if ($company->verification_status !== 'verified') {
-                $validated['verification_status'] = 'submitted';
-            }
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company was not found for this user.',
+            ], 404);
         }
 
-        $company->update($validated);
+        $validated = $request->validate([
+            'name'               => ['required', 'string', 'min:2', 'max:255'],
+            'gst_no'             => ['nullable', 'string', 'max:50'],
+            'pan_no'             => ['nullable', 'string', 'max:50'],
+            'industry'           => ['nullable', 'string', 'max:255'],
+            'address'            => ['nullable', 'string'],
+            'number_of_employee' => ['nullable', 'string', 'max:255'],
+            'gst_document'       => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'pan_document'       => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+        ]);
+
+        $taxInformationSubmitted = $request->filled('gst_no')
+        || $request->filled('pan_no')
+        || $request->hasFile('gst_document')
+        || $request->hasFile('pan_document');
+
+        $filesToDelete = [];
+
+        if ($request->hasFile('gst_document')) {
+            $newPath = $request->file('gst_document')->store(
+                'companies/tax-documents/gst',
+                'local',
+            );
+
+            if (! $newPath) {
+                return response()->json(['message' => 'Unable to store the GST document.'], 500);
+            }
+
+            if ($company->gst_document_path) {
+                $filesToDelete[] = $company->gst_document_path;
+            }
+
+            $company->gst_document_path = $newPath;
+        }
+
+        if ($request->hasFile('pan_document')) {
+            $newPath = $request->file('pan_document')->store(
+                'companies/tax-documents/pan',
+                'local',
+            );
+
+            if (! $newPath) {
+                return response()->json(['message' => 'Unable to store the PAN document.'], 500);
+            }
+
+            if ($company->pan_document_path) {
+                $filesToDelete[] = $company->pan_document_path;
+            }
+
+            $company->pan_document_path = $newPath;
+        }
+
+        unset($validated['gst_document'], $validated['pan_document']);
+
+        if ($taxInformationSubmitted && $company->verification_status !== 'verified') {
+            $validated['verification_status'] = 'submitted';
+        }
+
+        $company->fill($validated);
+        $company->save();
+
+        foreach ($filesToDelete as $path) {
+            Storage::disk('local')->delete($path);
+        }
 
         return response()->json([
             'message' => 'Business details updated successfully.',
-            'company' => new CompanyResource($request->user()->company),
+            'company' => new CompanyResource($company),
         ]);
     }
 
