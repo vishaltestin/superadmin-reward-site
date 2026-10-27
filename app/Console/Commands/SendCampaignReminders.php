@@ -4,8 +4,8 @@ namespace App\Console\Commands;
 use App\Jobs\DispatchCampaignReminderJob;
 use App\Models\Campaign;
 use App\Models\EmailTemplate;
+use App\Support\CampaignReminderSchedule;
 use Illuminate\Console\Command;
-use Illuminate\Support\Carbon;
 
 class SendCampaignReminders extends Command
 {
@@ -34,26 +34,28 @@ class SendCampaignReminders extends Command
                     foreach ([
                         'initial' => [
                             'enabled'  => 'send_initial_reminder',
-                            'date'     => 'reminder_initial_date',
                             'template' => 'reminder_initial_template_id',
                             'marker'   => 'initial_reminded_at',
                         ],
                         'expiry'  => [
                             'enabled'  => 'send_expiry_reminder',
-                            'date'     => 'reminder_expiry_date',
                             'template' => 'reminder_expiry_template_id',
                             'marker'   => 'expiry_reminded_at',
                         ],
                     ] as $type => $keys) {
-                        if (empty($config[$keys['enabled']]) || empty($config[$keys['date']])) {
+                        if (empty($config[$keys['enabled']])) {
                             continue;
                         }
 
-                        // Dates are stored as YYYY-MM-DD. If the scheduler was
-                        // down on that date, dispatch on the next run rather
-                        // than losing the reminder permanently.
-                        $dueDate = Carbon::parse($config[$keys['date']], $timezone)->startOfDay();
-                        if ($dueDate->gt($today)) {
+                        // New campaigns support multiple dates; old singular
+                        // values are normalized by CampaignReminderSchedule.
+                        $dueDate = CampaignReminderSchedule::latestDueDate(
+                            $config,
+                            $type,
+                            $today,
+                            $timezone
+                        );
+                        if (! $dueDate) {
                             continue;
                         }
 
@@ -77,16 +79,23 @@ class SendCampaignReminders extends Command
 
                         $hasPendingRecipients = $campaign->entitlements()
                             ->where('is_claimed', false)
-                            ->whereNull($keys['marker'])
+                            ->where(function ($query) use ($keys, $dueDate) {
+                                $query->whereNull($keys['marker'])
+                                    ->orWhereDate($keys['marker'], '<', $dueDate);
+                            })
                             ->exists();
 
                         if (! $hasPendingRecipients) {
                             continue;
                         }
 
-                        DispatchCampaignReminderJob::dispatch($campaign->id, $type);
+                        DispatchCampaignReminderJob::dispatch(
+                            $campaign->id,
+                            $type,
+                            $dueDate
+                        );
                         $remindersDispatched++;
-                        $this->info("Dispatched {$type} reminder for Campaign ID: {$campaign->id}");
+                        $this->info("Dispatched {$type} reminder ({$dueDate}) for Campaign ID: {$campaign->id}");
                     }
                 }
             });

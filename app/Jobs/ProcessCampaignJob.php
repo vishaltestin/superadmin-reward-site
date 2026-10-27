@@ -155,14 +155,13 @@ class ProcessCampaignJob implements ShouldQueue
         $rows = [];
 
         foreach ($userIds as $userId) {
-            $token = null;
-            $code  = null;
-
-            if ($campaign->reward_type === 'link') {
-                $token = Str::random(64);
-            } elseif ($campaign->reward_type === 'code') {
-                $code = strtoupper(Str::random(8));
-            }
+            // Every online reward gets a private landing-page token. Link
+            // campaigns use it for product claims; points/code campaigns use
+            // the same URL for their editable congratulations/code pages.
+            $token = Str::random(64);
+            $code  = $campaign->reward_type === 'code'
+                ? strtoupper(Str::random(8))
+                : null;
 
             $rows[] = [
                 'campaign_id'       => $campaign->id,

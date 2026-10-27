@@ -33,8 +33,8 @@ class LandingPageTemplateForm
                                 'code'   => 'Promo Code',
                                 'link'   => 'Magic Link',
                             ])
-                            ->placeholder('General / Master Template')
-                            ->helperText('Leave blank for general pages, or select a specific type to restrict where this can be used.'),
+                            ->required()
+                            ->helperText('Required for exact campaign filtering. Points/code pages are congratulations experiences; link pages must contain a reward selector.'),
 
                         Select::make('company_id')
                             ->relationship('company', 'name')

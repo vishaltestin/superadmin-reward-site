@@ -153,12 +153,10 @@ class EmailTemplateController extends Controller
 
         $rewardType = $validated['reward_type'] ?? null;
         if ($rewardType !== null) {
-            // Null reward_type denotes a general/legacy template. Templates
-            // with an explicit reward type must match the campaign's type.
-            $query->where(function ($query) use ($rewardType) {
-                $query->whereNull('reward_type')
-                    ->orWhere('reward_type', $rewardType);
-            });
+            // Campaign template pickers are exact-match only. Legacy templates
+            // with no reward_type remain visible in the unfiltered library,
+            // where they can be edited and assigned a type.
+            $query->where('reward_type', $rewardType);
         }
 
         $templates = $query->latest()->get([

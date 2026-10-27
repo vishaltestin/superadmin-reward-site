@@ -50,7 +50,13 @@ class EmployeeController extends Controller
             ->whereHas('rewardeeProfile.vertical', function ($query) use ($verticalSlug) {
                 $query->where('slug', $verticalSlug);
             })
-            ->with('rewardeeProfile');
+            ->with('rewardeeProfile')
+            ->when($request->boolean('active_only'), function ($query) {
+                // Campaign recipient pickers request only eligible users. The
+                // regular employee-management list still shows deactivated
+                // accounts for administrative purposes.
+                $query->where('is_active', true);
+            });
 
         if ($searchTerm !== '') {
             $query->where(function ($query) use ($searchTerm) {

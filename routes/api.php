@@ -153,6 +153,8 @@ Route::prefix('storefront')->group(function () {
     Route::prefix('{slug}')->group(function () {
         Route::get('/init', [StorefrontConfigController::class, 'initializeStore']);
         Route::post('/auth/login', [StorefrontAuthController::class, 'login']);
+        Route::post('/auth/forgot-password', [StorefrontAuthController::class, 'forgotPassword']);
+        Route::post('/auth/reset-password', [StorefrontAuthController::class, 'resetPassword']);
         Route::get('/search', [StorefrontCatalogController::class, 'search']);
         Route::get('/products/filter', [StorefrontFilterController::class, 'index']);
         Route::get('/categories', [StorefrontCatalogController::class, 'categories']);

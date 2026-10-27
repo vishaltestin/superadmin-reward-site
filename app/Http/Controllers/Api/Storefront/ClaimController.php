@@ -112,11 +112,18 @@ class ClaimController extends Controller
             ], 422);
         }
 
-        if ($entitlement->is_claimed) {
-            // Distinct error_code so the storefront can show a friendly
-            // "already claimed → view your order" state instead of the
-            // generic invalid-link card (it used to be indistinguishable
-            // from an expired link).
+        $rewardType = $entitlement->campaign->reward_type;
+        if (! in_array($rewardType, ['points', 'code', 'link'], true)) {
+            return response()->json([
+                'message'    => 'This reward does not have a supported landing page.',
+                'error_code' => 'invalid_token',
+            ], 404);
+        }
+
+        // Points are marked claimed as soon as their wallet credit is issued,
+        // and a code remains viewable after redemption. Only a magic-link
+        // product claim becomes unavailable after it has been used.
+        if ($rewardType === 'link' && $entitlement->is_claimed) {
             return response()->json([
                 'message'    => 'This reward has already been claimed.',
                 'error_code' => 'already_claimed',
@@ -140,13 +147,14 @@ class ClaimController extends Controller
         $templateId = $entitlement->campaign->config_json['landing_page_template_id'] ?? null;
         $template   = \App\Models\LandingPageTemplate::find($templateId);
 
-        // SAFETY NET: the claim page can only render blocks from the builder
-        // dialect (HeroBanner / VideoSection / CallToAction / RewardSelector),
-        // and a link claim is impossible without a RewardSelector block. If the
-        // campaign has no template attached, or the attached template's
-        // page_schema is in a different dialect / has no visible selector, serve
-        // the built-in default claim page instead of an empty schema (which
-        // rendered as a blank white screen).
+        // A template edited after campaign launch must still match the reward.
+        if ($template && (
+            ! $template->is_active
+            || $template->reward_type !== $rewardType
+        )) {
+            $template = null;
+        }
+
         $schema = $template?->page_schema ?? [];
         $theme  = $template?->global_theme_tokens;
 
@@ -154,20 +162,33 @@ class ClaimController extends Controller
             fn($block) => ($block['type'] ?? null) === 'RewardSelector'
             && ($block['isVisible'] ?? true)
         );
-
-        if (! $hasVisibleSelector) {
+        if ($rewardType === 'link' && ! $hasVisibleSelector) {
             $schema = $this->defaultClaimSchema();
-            $theme  = $theme ?? [
-                'primaryColor' => '#0f172a',
-                'textColor'    => '#0f172a',
-                'fontFamily'   => 'Inter, sans-serif',
-            ];
+            $theme  = $theme ?? $this->defaultLandingTheme();
         }
 
-        // Merge tags ({{ first_name }}, {{ company_name }}, ...) inside the
-        // template are replaced with the recipient's real data — the same
-        // parser the campaign emails use, so landing copy like "Welcome
-        // {{ first_name }}" renders personalized instead of literal.
+        if ($rewardType !== 'link') {
+            // Product selection is exclusive to reward-link campaigns.
+            $schema = array_values(array_filter(
+                $schema,
+                fn($block) => ($block['type'] ?? null) !== 'RewardSelector'
+            ));
+
+            $hasRenderableBlock = collect($schema)->contains(
+                fn($block) => in_array($block['type'] ?? null, [
+                    'HeroBanner',
+                    'VideoSection',
+                    'CallToAction',
+                ], true) && ($block['isVisible'] ?? true)
+            );
+
+            if (! $hasRenderableBlock) {
+                $schema = $this->defaultCongratulationsSchema($rewardType);
+                $theme  = $theme ?? $this->defaultLandingTheme();
+            }
+        }
+
+        // Merge recipient/reward variables into every editable text setting.
         $mergePayload = [
             'first_name'     => $user->first_name,
             'last_name'      => $user->last_name,
@@ -176,6 +197,7 @@ class ClaimController extends Controller
             'campaign_name'  => $entitlement->campaign->name,
             'reward_value'   => $entitlement->reward_value,
             'points_awarded' => $entitlement->reward_value,
+            'claim_code'     => $entitlement->claim_code ?? '',
             'current_date'   => now()->format('F j, Y'),
         ];
 
@@ -186,12 +208,75 @@ class ClaimController extends Controller
         });
 
         return response()->json([
+            'reward_type'     => $rewardType,
             'reward_value'    => $entitlement->reward_value,
+            'claim_code'      => $rewardType === 'code'
+                ? $entitlement->claim_code
+                : null,
             'recipient'       => $entitlement->user,
             'campaign_config' => $entitlement->campaign->config_json,
             'template_schema' => $schema,
             'template_theme'  => $theme,
         ]);
+    }
+
+    private function defaultLandingTheme(): array
+    {
+        return [
+            'primaryColor' => '#0f172a',
+            'textColor'    => '#0f172a',
+            'fontFamily'   => 'Inter, sans-serif',
+        ];
+    }
+
+    private function defaultCongratulationsSchema(string $rewardType): array
+    {
+        $isCode = $rewardType === 'code';
+
+        return [
+            [
+                'id'        => 'default_congratulations_hero',
+                'type'      => 'HeroBanner',
+                'isVisible' => true,
+                'variant'   => 'centered',
+                'content'   => [
+                    'heading'    => 'Congratulations, {{ first_name }}!',
+                    'subtext'    => $isCode
+                        ? 'You have received a reward worth ₹{{ reward_value }}. Your reward code is {{ claim_code }}.'
+                        : 'You have received {{ points_awarded }} points. They are ready to use in your rewards wallet.',
+                    'buttonText' => '',
+                    'buttonLink' => '',
+                ],
+                'styles'    => [
+                    'backgroundImage' => '',
+                    'overlayOpacity'  => 0,
+                    'backgroundColor' => '#0f172a',
+                    'headingColor'    => '#ffffff',
+                    'subtextColor'    => '#cbd5e1',
+                    'buttonBgColor'   => '#ffffff',
+                    'buttonTextColor' => '#0f172a',
+                ],
+            ],
+            [
+                'id'        => 'default_congratulations_cta',
+                'type'      => 'CallToAction',
+                'isVisible' => true,
+                'variant'   => 'standard',
+                'content'   => [
+                    'heading'    => $isCode
+                        ? 'Use code {{ claim_code }} when you redeem your reward.'
+                        : 'Enjoy your reward!',
+                    'buttonText' => '',
+                    'buttonLink' => '',
+                ],
+                'styles'    => [
+                    'backgroundColor' => '#f1f5f9',
+                    'headingColor'    => '#0f172a',
+                    'buttonBgColor'   => '#0f172a',
+                    'buttonTextColor' => '#ffffff',
+                ],
+            ],
+        ];
     }
 
     /**
@@ -295,6 +380,10 @@ class ClaimController extends Controller
                     ->with('campaign')
                     ->lockForUpdate()
                     ->firstOrFail();
+
+                if ($entitlement->campaign->reward_type !== 'link') {
+                    throw new Exception('Only reward-link tokens can be used to claim a product.');
+                }
 
                 $companyId = $entitlement->campaign->company_id;
 

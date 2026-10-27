@@ -6,6 +6,7 @@ use App\Jobs\ProcessCampaignJob;
 use App\Models\Campaign;
 use App\Models\EmailTemplate;
 use App\Models\LandingPageTemplate;
+use App\Support\CampaignReminderSchedule;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -172,8 +173,12 @@ class CampaignController extends Controller
             'config_json.reminder_expiry_template_id'  => 'nullable|integer|exists:email_templates,id',
             'config_json.send_initial_reminder'        => 'sometimes|boolean',
             'config_json.reminder_initial_date'        => 'nullable|date_format:Y-m-d',
+            'config_json.reminder_initial_dates'       => 'nullable|array',
+            'config_json.reminder_initial_dates.*'     => 'date_format:Y-m-d|distinct',
             'config_json.send_expiry_reminder'         => 'sometimes|boolean',
             'config_json.reminder_expiry_date'         => 'nullable|date_format:Y-m-d',
+            'config_json.reminder_expiry_dates'        => 'nullable|array',
+            'config_json.reminder_expiry_dates.*'      => 'date_format:Y-m-d|distinct',
         ]);
 
         // Keep the dynamic storefront fields (catalog allow-list, SMS copy,
@@ -213,6 +218,12 @@ class CampaignController extends Controller
                 $validated['event_id'] ?? null,
                 'config_json.email_template_id'
             );
+
+            if ($rewardType === 'link' && empty($configJson['landing_page_template_id'])) {
+                throw ValidationException::withMessages([
+                    'config_json.landing_page_template_id' => 'Reward-link campaigns require a landing-page template with a visible reward selector.',
+                ]);
+            }
 
             if (! empty($configJson['landing_page_template_id'])) {
                 $this->assertCampaignTemplateIsCompatible(
@@ -255,13 +266,16 @@ class CampaignController extends Controller
             $walletTransaction = null;
 
             if ($validated['distribution_type'] === 'online') {
-                // ── Tenant guard: recipients must be this company's own active
-                //    rewardees. Validation alone (exists:users,id) would let a
-                //    company gift points to any user on the platform.
+                // Tenant/audience guard: recipients must be active members of
+                // this company with a recipient profile in the campaign's
+                // vertical. Promoted employees (sub_admin) remain eligible.
                 $recipientIds = \App\Models\User::whereIn('id', $validated['recipient_ids'])
                     ->where('company_id', $company->id)
-                    ->where('user_type', 'rewardee')
+                    ->whereIn('user_type', ['rewardee', 'sub_admin'])
                     ->where('is_active', true)
+                    ->whereHas('rewardeeProfile', function ($query) use ($validated) {
+                        $query->where('vertical_id', (int) $validated['vertical_id']);
+                    })
                     ->pluck('id')
                     ->toArray();
 
@@ -378,9 +392,9 @@ class CampaignController extends Controller
             ]);
         }
 
-        if ($template->reward_type !== null && $template->reward_type !== $rewardType) {
+        if ($template->reward_type !== $rewardType) {
             throw ValidationException::withMessages([
-                $errorField => 'The selected template is not compatible with this reward type.',
+                $errorField => 'The selected template must have the exact same reward type as this campaign. Assign a reward type to legacy templates before using them.',
             ]);
         }
 
@@ -419,74 +433,94 @@ class CampaignController extends Controller
             ]);
         }
 
+        $initialDates = CampaignReminderSchedule::dates($config, 'initial');
+        $expiryDates  = CampaignReminderSchedule::dates($config, 'expiry');
+        $initialField = isset($config['reminder_initial_dates'])
+        && is_array($config['reminder_initial_dates'])
+            ? 'config_json.reminder_initial_dates'
+            : 'config_json.reminder_initial_date';
+        $expiryField = isset($config['reminder_expiry_dates'])
+        && is_array($config['reminder_expiry_dates'])
+            ? 'config_json.reminder_expiry_dates'
+            : 'config_json.reminder_expiry_date';
+
         if ($sendInitial) {
-            if (empty($config['reminder_initial_date'])) {
+            if (empty($initialDates)) {
                 throw ValidationException::withMessages([
-                    'config_json.reminder_initial_date' => 'Choose a date for the follow-up reminder.',
+                    $initialField => 'Choose at least one follow-up reminder date.',
                 ]);
             }
 
-            $initialDate = Carbon::createFromFormat(
-                'Y-m-d',
-                $config['reminder_initial_date'],
-                $timezone
-            )->startOfDay();
+            foreach ($initialDates as $index => $date) {
+                $initialDate = Carbon::createFromFormat(
+                    'Y-m-d',
+                    $date,
+                    $timezone
+                )->startOfDay();
+                $field = str_ends_with($initialField, '_dates')
+                    ? "{$initialField}.{$index}"
+                    : $initialField;
 
-            if (! $initialDate->gt($today)) {
-                throw ValidationException::withMessages([
-                    'config_json.reminder_initial_date' => 'The follow-up reminder date must be in the future.',
-                ]);
-            }
+                if (! $initialDate->gt($today)) {
+                    throw ValidationException::withMessages([
+                        $field => 'Every follow-up reminder date must be in the future.',
+                    ]);
+                }
 
-            if (! $initialDate->gt($startsAt->copy()->startOfDay())) {
-                throw ValidationException::withMessages([
-                    'config_json.reminder_initial_date' => 'The follow-up reminder must be on a date after campaign launch.',
-                ]);
-            }
+                if (! $initialDate->gt($startsAt->copy()->startOfDay())) {
+                    throw ValidationException::withMessages([
+                        $field => 'Every follow-up reminder must be on a date after campaign launch.',
+                    ]);
+                }
 
-            if ($expiresAt && ! $initialDate->lt($expiresAt->copy()->startOfDay())) {
-                throw ValidationException::withMessages([
-                    'config_json.reminder_initial_date' => 'The follow-up reminder must be before campaign expiration.',
-                ]);
+                if ($expiresAt && ! $initialDate->lt($expiresAt->copy()->startOfDay())) {
+                    throw ValidationException::withMessages([
+                        $field => 'Every follow-up reminder must be before campaign expiration.',
+                    ]);
+                }
             }
         }
 
         if ($sendExpiry) {
             if (! $expiresAt) {
                 throw ValidationException::withMessages([
-                    'expires_at' => 'Set a campaign expiration before enabling an expiry reminder.',
+                    'expires_at' => 'Set a campaign expiration before enabling expiry reminders.',
                 ]);
             }
 
-            if (empty($config['reminder_expiry_date'])) {
+            if (empty($expiryDates)) {
                 throw ValidationException::withMessages([
-                    'config_json.reminder_expiry_date' => 'Choose a date for the expiry reminder.',
+                    $expiryField => 'Choose at least one expiry reminder date.',
                 ]);
             }
 
-            $expiryReminderDate = Carbon::createFromFormat(
-                'Y-m-d',
-                $config['reminder_expiry_date'],
-                $timezone
-            )->startOfDay();
+            foreach ($expiryDates as $index => $date) {
+                $expiryReminderDate = Carbon::createFromFormat(
+                    'Y-m-d',
+                    $date,
+                    $timezone
+                )->startOfDay();
+                $field = str_ends_with($expiryField, '_dates')
+                    ? "{$expiryField}.{$index}"
+                    : $expiryField;
 
-            if (! $expiryReminderDate->gt($today)) {
-                throw ValidationException::withMessages([
-                    'config_json.reminder_expiry_date' => 'The expiry reminder date must be in the future.',
-                ]);
-            }
+                if (! $expiryReminderDate->gt($today)) {
+                    throw ValidationException::withMessages([
+                        $field => 'Every expiry reminder date must be in the future.',
+                    ]);
+                }
 
-            if (! $expiryReminderDate->lt($expiresAt->copy()->startOfDay())) {
-                throw ValidationException::withMessages([
-                    'config_json.reminder_expiry_date' => 'The expiry reminder must be before campaign expiration.',
-                ]);
+                if (! $expiryReminderDate->lt($expiresAt->copy()->startOfDay())) {
+                    throw ValidationException::withMessages([
+                        $field => 'Every expiry reminder must be before campaign expiration.',
+                    ]);
+                }
             }
         }
 
-        if ($sendInitial && $sendExpiry
-            && ($config['reminder_initial_date'] ?? null) === ($config['reminder_expiry_date'] ?? null)) {
+        if ($sendInitial && $sendExpiry && ! empty(array_intersect($initialDates, $expiryDates))) {
             throw ValidationException::withMessages([
-                'config_json.reminder_expiry_date' => 'Choose different dates for the two reminders.',
+                $expiryField => 'Follow-up and expiry reminders cannot use the same date.',
             ]);
         }
     }

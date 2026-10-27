@@ -56,8 +56,8 @@ class EmailTemplateForm
                                 'code'   => 'Promo Code',
                                 'link'   => 'Magic Link',
                             ])
-                            ->placeholder('General / Master Template')
-                            ->helperText('Leave blank for general emails, or select a specific type to restrict where this can be used.'),
+                            ->required()
+                            ->helperText('Required for exact campaign filtering: points templates only appear for points campaigns, code for code, and link for link.'),
 
                         Select::make('company_id')
                             ->relationship('company', 'name')

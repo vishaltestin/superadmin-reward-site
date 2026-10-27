@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Filament\Resources\LandingPageTemplates\Tables;
 
 use Filament\Actions\BulkActionGroup;
@@ -8,7 +7,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ReplicateAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\BadgeColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class LandingPageTemplatesTable
@@ -34,20 +33,27 @@ class LandingPageTemplatesTable
                     ->sortable()
                     ->searchable(),
 
+                TextColumn::make('reward_type')
+                    ->label('Reward Type')
+                    ->badge()
+                    ->formatStateUsing(fn(?string $state): string => $state ? ucfirst($state) : 'Unassigned')
+                    ->color(fn(?string $state): string => $state ? 'primary' : 'warning')
+                    ->sortable(),
+
                 TextColumn::make('company.name')
                     ->label('Ownership')
-                    ->default('Global Master') 
+                    ->default('Global Master')
                     ->badge()
-                    ->color(fn ($state) => $state === 'Global Master' ? 'success' : 'gray')
+                    ->color(fn($state) => $state === 'Global Master' ? 'success' : 'gray')
                     ->sortable()
                     ->searchable(),
 
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'draft' => 'warning',
+                    ->color(fn(string $state): string => match ($state) {
+                        'draft'     => 'warning',
                         'published' => 'success',
-                        'archived' => 'danger',
+                        'archived'  => 'danger',
                     }),
 
                 IconColumn::make('is_active')
@@ -60,7 +66,13 @@ class LandingPageTemplatesTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                SelectFilter::make('reward_type')
+                    ->label('Reward Type')
+                    ->options([
+                        'points' => 'Points',
+                        'code'   => 'Code',
+                        'link'   => 'Link',
+                    ]),
             ])
             ->recordActions([
                 EditAction::make(),

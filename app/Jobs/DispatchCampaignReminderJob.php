@@ -5,6 +5,7 @@ use App\Models\Campaign;
 use App\Models\CampaignEntitlement;
 use App\Models\EmailTemplate;
 use App\Services\EmailParserService;
+use App\Support\CampaignReminderSchedule;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -13,6 +14,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class DispatchCampaignReminderJob implements ShouldQueue
 {
@@ -20,11 +22,16 @@ class DispatchCampaignReminderJob implements ShouldQueue
 
     protected int $campaignId;
     protected string $reminderType;
+    protected string $reminderDate = '';
 
-    public function __construct(int $campaignId, string $reminderType)
-    {
+    public function __construct(
+        int $campaignId,
+        string $reminderType,
+        ?string $reminderDate = null
+    ) {
         $this->campaignId   = $campaignId;
         $this->reminderType = $reminderType;
+        $this->reminderDate = $reminderDate ?? '';
     }
 
     /**
@@ -62,8 +69,7 @@ class DispatchCampaignReminderJob implements ShouldQueue
             || ! $template->html_body
             || ($template->company_id !== null
                 && (int) $template->company_id !== (int) $campaign->company_id)
-            || ($template->reward_type !== null
-                && $template->reward_type !== $campaign->reward_type)) {
+            || $template->reward_type !== $campaign->reward_type) {
             return null;
         }
 
@@ -87,9 +93,6 @@ class DispatchCampaignReminderJob implements ShouldQueue
         $enabledKey = $this->reminderType === 'initial'
             ? 'send_initial_reminder'
             : 'send_expiry_reminder';
-        $dateKey = $this->reminderType === 'initial'
-            ? 'reminder_initial_date'
-            : 'reminder_expiry_date';
         $templateKey = $this->reminderType === 'initial'
             ? 'reminder_initial_template_id'
             : 'reminder_expiry_template_id';
@@ -97,15 +100,34 @@ class DispatchCampaignReminderJob implements ShouldQueue
             ? 'initial_reminded_at'
             : 'expiry_reminded_at';
 
-        if (empty($config[$enabledKey]) || empty($config[$dateKey])) {
+        if (empty($config[$enabledKey])) {
             return;
         }
 
-        $timezone = config('app.timezone', 'UTC');
-        $dueDate  = Carbon::parse($config[$dateKey], $timezone)->startOfDay();
-        if ($dueDate->gt(now($timezone)->startOfDay())) {
+        $timezone      = config('app.timezone', 'UTC');
+        $today         = now($timezone)->startOfDay();
+        $latestDueDate = CampaignReminderSchedule::latestDueDate(
+            $config,
+            $this->reminderType,
+            $today,
+            $timezone
+        );
+
+        if (! $latestDueDate) {
             return;
         }
+
+        // Only the newest due occurrence should send. Older queued jobs are
+        // discarded after a newer date becomes due, preventing catch-up spam.
+        if ($this->reminderDate && $this->reminderDate !== $latestDueDate) {
+            return;
+        }
+        $reminderDate  = $this->reminderDate ?: $latestDueDate;
+        $scheduledDate = Carbon::createFromFormat(
+            'Y-m-d',
+            $reminderDate,
+            $timezone
+        )->startOfDay();
 
         // Do not send a belated claim reminder after the campaign has expired.
         if ($campaign->expires_at && $campaign->expires_at->isPast()) {
@@ -130,30 +152,41 @@ class DispatchCampaignReminderJob implements ShouldQueue
 
         $campaign->entitlements()
             ->where('is_claimed', false)
-            ->whereNull($markerColumn)
+            ->where(function ($query) use ($markerColumn, $reminderDate) {
+                $query->whereNull($markerColumn)
+                    ->orWhereDate($markerColumn, '<', $reminderDate);
+            })
             ->select('id')
             ->chunkById(250, function ($pendingEntitlements) use (
                 $campaign,
                 $template,
-                $markerColumn
+                $markerColumn,
+                $scheduledDate
             ) {
                 foreach ($pendingEntitlements as $pendingEntitlement) {
                     DB::transaction(function () use (
                         $pendingEntitlement,
                         $campaign,
                         $template,
-                        $markerColumn
+                        $markerColumn,
+                        $scheduledDate
                     ) {
-                        // The row lock and per-type marker prevent two
-                        // overlapping jobs from sending duplicate reminders.
+                        // The row lock and per-type last-sent marker allow a
+                        // new date while preventing duplicate sends for the
+                        // same occurrence across overlapping queue jobs.
                         $entitlement = CampaignEntitlement::with('user.company')
                             ->whereKey($pendingEntitlement->id)
                             ->lockForUpdate()
                             ->first();
 
-                        if (! $entitlement
-                            || $entitlement->is_claimed
-                            || $entitlement->{$markerColumn}) {
+                        if (! $entitlement || $entitlement->is_claimed) {
+                            return;
+                        }
+
+                        $lastSentDate = $entitlement->{$markerColumn}
+                            ? Carbon::parse($entitlement->{$markerColumn})->startOfDay()
+                            : null;
+                        if ($lastSentDate && $lastSentDate->gte($scheduledDate)) {
                             return;
                         }
 
@@ -164,6 +197,10 @@ class DispatchCampaignReminderJob implements ShouldQueue
                         $user = $entitlement->user;
                         if (! $user || ! $user->email) {
                             return;
+                        }
+
+                        if (! $entitlement->claim_token) {
+                            $entitlement->update(['claim_token' => Str::random(64)]);
                         }
 
                         $claimUrl = $this->claimUrl(

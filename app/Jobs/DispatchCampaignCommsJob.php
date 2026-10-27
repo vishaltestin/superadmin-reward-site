@@ -10,6 +10,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class DispatchCampaignCommsJob implements ShouldQueue
 {
@@ -63,7 +64,10 @@ class DispatchCampaignCommsJob implements ShouldQueue
         }
 
         $template = EmailTemplate::find($templateId);
-        if (! $template || ! $template->html_body) {
+        if (! $template
+            || ! $template->is_active
+            || ! $template->html_body
+            || $template->reward_type !== $campaign->reward_type) {
             return;
         }
 
@@ -81,17 +85,24 @@ class DispatchCampaignCommsJob implements ShouldQueue
                 continue;
             }
 
+            // Backfill older points/code entitlements which pre-date landing
+            // pages, so reminder/new campaign mails never contain a '#' CTA.
+            if (! $entitlement->claim_token) {
+                $entitlement->update(['claim_token' => Str::random(64)]);
+            }
+
             $claimUrl = $this->claimUrl($campaign, $entitlement->claim_token);
 
             $payload = [
-                'first_name'    => $user->first_name,
-                'last_name'     => $user->last_name,
-                'company_name'  => $user->company->name ?? 'Our Company',
-                'current_date'  => now()->format('F j, Y'),
-                'campaign_name' => $campaign->name,
-                'reward_value'  => $entitlement->reward_value,
-                'claim_link'    => $claimUrl ?? '#',
-                'claim_code'    => $entitlement->claim_code ?? '',
+                'first_name'     => $user->first_name,
+                'last_name'      => $user->last_name,
+                'company_name'   => $user->company->name ?? 'Our Company',
+                'current_date'   => now()->format('F j, Y'),
+                'campaign_name'  => $campaign->name,
+                'reward_value'   => $entitlement->reward_value,
+                'points_awarded' => $entitlement->reward_value,
+                'claim_link'     => $claimUrl ?? '#',
+                'claim_code'     => $entitlement->claim_code ?? '',
             ];
 
             $htmlBody     = EmailParserService::parse($template->html_body, $payload);

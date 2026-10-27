@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Filament\Resources\EmailTemplates\Tables;
 
 use Filament\Actions\BulkActionGroup;
@@ -8,6 +7,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ReplicateAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class EmailTemplatesTable
@@ -26,11 +26,18 @@ class EmailTemplatesTable
                     ->sortable()
                     ->searchable(),
 
+                TextColumn::make('reward_type')
+                    ->label('Reward Type')
+                    ->badge()
+                    ->formatStateUsing(fn(?string $state): string => $state ? ucfirst($state) : 'Unassigned')
+                    ->color(fn(?string $state): string => $state ? 'primary' : 'warning')
+                    ->sortable(),
+
                 TextColumn::make('company.name')
                     ->label('Ownership')
-                    ->default('Global Master') 
+                    ->default('Global Master')
                     ->badge()
-                    ->color(fn ($state) => $state === 'Global Master' ? 'success' : 'gray')
+                    ->color(fn($state) => $state === 'Global Master' ? 'success' : 'gray')
                     ->sortable()
                     ->searchable(),
 
@@ -52,11 +59,17 @@ class EmailTemplatesTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                SelectFilter::make('reward_type')
+                    ->label('Reward Type')
+                    ->options([
+                        'points' => 'Points',
+                        'code'   => 'Code',
+                        'link'   => 'Link',
+                    ]),
             ])
             ->recordActions([
                 EditAction::make(),
-                
+
                 // Allows you to quickly duplicate a master template
                 ReplicateAction::make()
                     ->excludeAttributes(['company_id'])

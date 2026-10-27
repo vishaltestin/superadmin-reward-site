@@ -124,12 +124,9 @@ class LandingPageController extends Controller
 
         $rewardType = $validated['reward_type'] ?? null;
         if ($rewardType !== null) {
-            // Null reward_type represents a legacy/general template. Explicitly
-            // typed templates are only offered for their matching reward type.
-            $query->where(function ($query) use ($rewardType) {
-                $query->whereNull('reward_type')
-                    ->orWhere('reward_type', $rewardType);
-            });
+            // Exact reward-type matching prevents points/code/link designs from
+            // leaking into one another's campaign template pickers.
+            $query->where('reward_type', $rewardType);
         }
 
         $columns = [
@@ -205,6 +202,7 @@ class LandingPageController extends Controller
             return LandingPageTemplate::create([
                 'event_id'            => $masterTemplate->event_id,
                 'company_id'          => $user->company_id,
+                'reward_type'         => $masterTemplate->reward_type,
                 'name'                => $newName,
                 'title'               => $newTitle,
                 'thumbnail_path'      => $masterTemplate->thumbnail_path,
@@ -236,7 +234,23 @@ class LandingPageController extends Controller
             'seo_meta'            => 'sometimes|array',
             'page_schema'         => 'sometimes|array',
             'is_active'           => 'sometimes|boolean',
+            'reward_type'         => 'nullable|in:points,code,link',
         ]);
+
+        $effectiveRewardType = array_key_exists('reward_type', $validated)
+            ? $validated['reward_type']
+            : $template->reward_type;
+
+        if ($effectiveRewardType !== 'link') {
+            // Points/code pages are content-only. Clean legacy selectors too,
+            // including when only the reward_type field is being changed.
+            $schema                   = $validated['page_schema'] ?? $template->page_schema ?? [];
+            $validated['page_schema'] = array_values(array_filter(
+                $schema,
+                fn($block) => ! is_array($block)
+                || ($block['type'] ?? null) !== 'RewardSelector'
+            ));
+        }
 
         // Keep database clean by stripping base URLs
         if (isset($validated['thumbnail_path'])) {
